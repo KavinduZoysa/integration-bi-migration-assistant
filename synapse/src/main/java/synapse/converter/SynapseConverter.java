@@ -26,10 +26,7 @@ import common.BallerinaModel.ModuleTypeDef;
 import common.BallerinaModel.Service;
 import common.BallerinaModel.TextDocument;
 import synapse.converter.BIRConverter.APIConverter;
-import synapse.converter.ConversionContext.SequenceMetadata;
 import synapse.model.Synapse.Kind;
-import synapse.model.Synapse.Sequence;
-import synapse.model.Synapse.SequenceMediator;
 import synapse.model.Synapse.SynapseNode;
 import synapse.reader.SynapseConfigReader;
 
@@ -39,8 +36,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -76,11 +71,21 @@ public final class SynapseConverter {
     /**
      * Migrate a Synapse project directory or a single artifact file to a Ballerina package.
      *
-     * <p>Artifacts are processed one at a time: each artifact file is parsed, converted and flushed
-     * to the generated Ballerina package before the next one is read, so the whole project is never
-     * held in memory at once. The generated constructs are consolidated by kind across all artifacts:
-     * services (with the shared HTTP listener) go to {@code main.bal}, functions to
-     * {@code functions.bal} and record types to {@code types.bal}.
+     * <p>Conversion runs in two phases, each parsing the artifacts:
+     * <ol>
+     *   <li><b>Analysis</b> ({@link ProjectAnalyzer#analyze}) walks the whole project once to gather the
+     *       cross-artifact facts conversion needs — currently the transitive {@code respond} /
+     *       {@code payloadFactory} sequence metadata — and returns them as an immutable
+     *       {@link AnalysisResult}.</li>
+     *   <li><b>Conversion</b> consumes that result via a {@link ConversionContext} and processes the
+     *       artifacts one at a time: each artifact file is parsed, converted and flushed to the
+     *       generated Ballerina package before the next one is read, so the whole project is never held
+     *       in memory at once.</li>
+     * </ol>
+     *
+     * <p>The generated constructs are consolidated by kind across all artifacts: services (with the
+     * shared HTTP listener) go to {@code main.bal}, functions to {@code functions.bal} and record types
+     * to {@code types.bal}.
      *
      * @param sourcePath    Synapse project directory or artifact file path
      * @param outputPath    output directory for the generated Ballerina package (nullable -> default)
@@ -110,9 +115,13 @@ public final class SynapseConverter {
             throw new RuntimeException("No Synapse .xml artifacts found at: " + sourcePath);
         }
 
+        AnalysisResult analysisResult = ProjectAnalyzer.analyze(artifactFiles);
+        ConversionContext context = new ConversionContext(analysisResult);
+
         if (dryRun) {
             for (File artifact : artifactFiles) {
-                convertArtifact(artifact, new ConversionContext());
+                convertArtifact(artifact, context);
+                context.clearArtifactOutput();
             }
             return;
         }
@@ -124,8 +133,6 @@ public final class SynapseConverter {
             Files.writeString(targetDir.resolve("Ballerina.toml"),
                     ballerinaToml(orgName.orElse(DEFAULT_ORG), projectName.orElse(DEFAULT_PACKAGE)));
 
-            ConversionContext context = new ConversionContext();
-            collectSequenceMetadata(artifactFiles, context);
             for (File artifact : artifactFiles) {
                 convertArtifact(artifact, context);
                 writeArtifacts(targetDir, context);
@@ -136,93 +143,14 @@ public final class SynapseConverter {
         }
     }
 
-    private static void collectSequenceMetadata(List<File> artifactFiles, ConversionContext context) {
-        Map<String, SequenceMetadata> metadata = new HashMap<>();
-        for (File artifact : artifactFiles) {
-            for (SynapseNode node : SynapseConfigReader.parse(artifact)) {
-                if (node instanceof Sequence sequence) {
-                    SequenceMetadata sequenceMetadata = buildSequenceMetadata(sequence);
-                    metadata.put(sequenceMetadata.name(), sequenceMetadata);
-                }
-            }
-        }
-        propagateRespond(metadata);
-        propagatePayloadFactory(metadata);
-        metadata.values().forEach(context::addSequenceMetadata);
-    }
-
-    private static SequenceMetadata buildSequenceMetadata(Sequence sequence) {
-        boolean containsRespond = false;
-        boolean containsPayloadFactory = false;
-        List<String> referencedSequences = new ArrayList<>();
-        for (SynapseNode mediator : sequence.mediators()) {
-            if (mediator.kind() == Kind.RESPOND) {
-                containsRespond = true;
-            } else if (mediator.kind() == Kind.PAYLOAD_FACTORY) {
-                containsPayloadFactory = true;
-            } else if (mediator instanceof SequenceMediator sequenceMediator) {
-                referencedSequences.add(sequenceMediator.key());
-            }
-        }
-        return new SequenceMetadata(sequence.name(), containsRespond, containsPayloadFactory,
-                referencedSequences);
-    }
-
-    private static void propagateRespond(Map<String, SequenceMetadata> metadata) {
-        boolean changed = true;
-        while (changed) {
-            changed = false;
-            for (String name : new ArrayList<>(metadata.keySet())) {
-                SequenceMetadata sequenceMetadata = metadata.get(name);
-                if (sequenceMetadata.containsRespond()) {
-                    continue;
-                }
-                for (String referenced : sequenceMetadata.referencedSequences()) {
-                    SequenceMetadata referencedMetadata = metadata.get(referenced);
-                    if (referencedMetadata != null && referencedMetadata.containsRespond()) {
-                        metadata.put(name, new SequenceMetadata(name, true,
-                                sequenceMetadata.containsPayloadFactory(),
-                                sequenceMetadata.referencedSequences()));
-                        changed = true;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    private static void propagatePayloadFactory(Map<String, SequenceMetadata> metadata) {
-        boolean changed = true;
-        while (changed) {
-            changed = false;
-            for (String name : new ArrayList<>(metadata.keySet())) {
-                SequenceMetadata sequenceMetadata = metadata.get(name);
-                if (sequenceMetadata.containsPayloadFactory()) {
-                    continue;
-                }
-                for (String referenced : sequenceMetadata.referencedSequences()) {
-                    SequenceMetadata referencedMetadata = metadata.get(referenced);
-                    if (referencedMetadata != null && referencedMetadata.containsPayloadFactory()) {
-                        metadata.put(name, new SequenceMetadata(name, sequenceMetadata.containsRespond(),
-                                true, sequenceMetadata.referencedSequences()));
-                        changed = true;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    private static ConversionContext convertArtifact(File artifact, ConversionContext context) {
-        List<SynapseNode> nodes = SynapseConfigReader.parse(artifact);
-        for (SynapseNode node : nodes) {
+    private static void convertArtifact(File artifact, ConversionContext context) {
+        for (SynapseNode node : SynapseConfigReader.parse(artifact)) {
             BIRConverter<ConversionContext> converter = ROOT_CONVERTERS.get(node.kind());
             if (converter == null) {
                 throw new UnsupportedOperationException("No root converter for Synapse node kind: " + node.kind());
             }
             converter.convert(node, context);
         }
-        return context;
     }
 
     private static void writeArtifacts(Path targetDir, ConversionContext context) throws IOException {

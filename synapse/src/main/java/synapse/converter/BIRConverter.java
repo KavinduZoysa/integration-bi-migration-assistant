@@ -228,7 +228,7 @@ public interface BIRConverter<C> {
         @Override
         public void convert(SynapseNode node, ConversionContext context) {
             Sequence sequence = (Sequence) node;
-            ConversionContext.SequenceMetadata metadata = context.sequenceMetadata(sequence.name())
+            AnalysisResult.SequenceMetadata metadata = context.sequenceMetadata(sequence.name())
                     .orElse(null);
             List<Parameter> params = List.of();
             boolean containsPayloadFactory = metadata != null && metadata.containsPayloadFactory();
@@ -263,7 +263,7 @@ public interface BIRConverter<C> {
         @Override
         public void convert(SynapseNode node, ScopeContext context) {
             SequenceMediator sequenceMediator = (SequenceMediator) node;
-            ConversionContext.SequenceMetadata metadata = context.shared().sequenceMetadata(sequenceMediator.key())
+            AnalysisResult.SequenceMetadata metadata = context.shared().sequenceMetadata(sequenceMediator.key())
                     .orElse(null);
             List<Expression> args = List.of();
             if (metadata != null && metadata.containsPayloadFactory()) {

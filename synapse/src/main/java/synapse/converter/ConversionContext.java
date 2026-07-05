@@ -20,18 +20,17 @@ package synapse.converter;
 import common.BallerinaModel.Function;
 import common.BallerinaModel.ModuleTypeDef;
 import common.BallerinaModel.Service;
+import synapse.converter.AnalysisResult.SequenceMetadata;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
- * Project-wide state shared across every artifact and every converter for a single migration run.
+ * Mutable per-run state for the conversion phase (phase 2), threaded through every converter for a
+ * single migration run.
  *
- * <p>A single instance is created in {@code SynapseConverter} and threaded through all converters.
- * Scope-local state (the statements, payload and {@code respondInitialized} flag of the resource or
+ * <p>Scope-local state (the statements, payload and {@code respondInitialized} flag of the resource or
  * sequence currently being converted) does <b>not</b> live here; it lives on a {@link ScopeContext},
  * which holds a reference back to this context.
  *
@@ -40,18 +39,24 @@ import java.util.Optional;
  *   <li><b>Per-artifact output</b> ({@link #services()}, {@link #functions()}, {@link #records()})
  *       is accumulated while an artifact is converted, flushed to the generated package, then
  *       discarded via {@link #clearArtifactOutput()} before the next artifact is read.</li>
- *   <li><b>Cross-artifact metadata</b> (e.g. a registry of generated services / sequences for
- *       resolving references between artifacts) must survive {@link #clearArtifactOutput()}, so it
- *       belongs in fields that the clear does not touch. See the extension point below.</li>
+ *   <li><b>Cross-artifact metadata</b> gathered by phase 1 is not owned here: it is held by the
+ *       immutable {@link AnalysisResult} this context wraps, and exposed read-only via
+ *       {@link #sequenceMetadata(String)}. Being immutable, it is unaffected by
+ *       {@link #clearArtifactOutput()}.</li>
  * </ul>
  */
 public class ConversionContext {
+
+    private final AnalysisResult analysis;
 
     private final List<Service> services = new ArrayList<>();
     private final List<Function> functions = new ArrayList<>();
     private final List<ModuleTypeDef> records = new ArrayList<>();
 
-    private final Map<String, SequenceMetadata> sequenceMetadata = new HashMap<>();
+    public ConversionContext(AnalysisResult analysis) {
+        assert analysis != null : "analysis result must not be null";
+        this.analysis = analysis;
+    }
 
     public void addService(Service service) {
         services.add(service);
@@ -77,12 +82,12 @@ public class ConversionContext {
         return records;
     }
 
-    public void addSequenceMetadata(SequenceMetadata metadata) {
-        sequenceMetadata.put(metadata.name(), metadata);
-    }
-
+    /**
+     * The phase-1 facts about the {@code <sequence>} named {@code name}, or empty when no such sequence
+     * was seen during analysis.
+     */
     public Optional<SequenceMetadata> sequenceMetadata(String name) {
-        return Optional.ofNullable(sequenceMetadata.get(name));
+        return analysis.sequenceMetadata(name);
     }
 
     /**
@@ -91,7 +96,7 @@ public class ConversionContext {
      * {@code functions.bal} needs the {@code ballerina/http} import.
      */
     public boolean functionsRequireHttpImport() {
-        return sequenceMetadata.values().stream().anyMatch(SequenceMetadata::containsPayloadFactory);
+        return analysis.containsPayloadFactoryAnywhere();
     }
 
     /**
@@ -102,12 +107,5 @@ public class ConversionContext {
         services.clear();
         functions.clear();
         records.clear();
-    }
-
-    // Pre-gathered facts about a <sequence>. containsRespond and containsPayloadFactory are transitive:
-    // also true when a referencedSequences entry responds / sets a payload (resolved by propagation),
-    // so a call site can decide across chains whether to return a response or pass one in.
-    public record SequenceMetadata(String name, boolean containsRespond, boolean containsPayloadFactory,
-                                   List<String> referencedSequences) {
     }
 }
