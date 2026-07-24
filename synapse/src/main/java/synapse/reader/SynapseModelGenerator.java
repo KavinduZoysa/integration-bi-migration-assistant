@@ -31,8 +31,16 @@ import synapse.model.Synapse.Sequence;
 import synapse.model.Synapse.SequenceMediator;
 import synapse.model.Synapse.SynapseNode;
 
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
+
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 
 public class SynapseModelGenerator {
 
@@ -183,13 +191,23 @@ public class SynapseModelGenerator {
         }
 
         String value = element.getAttribute("value");
+        String expression = element.getAttribute("expression");
+
+        // An OM property carries its value as a child element (e.g. <property ...><foo>bar</foo></property>)
+        // rather than a value/expression attribute; serialize it so it flows through the literal handler.
+        if (value.isEmpty() && expression.isEmpty()) {
+            List<Element> children = childElements(element);
+            if (!children.isEmpty()) {
+                value = serializeElement(children.get(0));
+            }
+        }
 
         String action = element.getAttribute("action");
         if (action.isEmpty()) {
             action = DEFAULT_PROPERTY_ACTION;
         }
 
-        return new Property(name, type, scope, value, action);
+        return new Property(name, type, scope, value, expression, action);
     }
 
     private static PayloadFactory readPayloadFactory(Element element) {
@@ -201,6 +219,18 @@ public class SynapseModelGenerator {
             }
         }
         return new PayloadFactory(mediaType, format);
+    }
+
+    private static String serializeElement(Element element) {
+        try {
+            Transformer transformer = TransformerFactory.newInstance().newTransformer();
+            transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+            StringWriter writer = new StringWriter();
+            transformer.transform(new DOMSource(element), new StreamResult(writer));
+            return writer.toString().trim();
+        } catch (TransformerException e) {
+            throw new IllegalStateException("Failed to serialize property element", e);
+        }
     }
 
     private static List<Element> childElements(Element parent) {

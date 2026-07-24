@@ -74,13 +74,18 @@ public record Synapse() {
     }
 
     // <property name="..." scope="default|transport|axis2|axis2-client" type="string" value="..."
-    //           action="set|remove"/>
+    //           expression="..." action="set|remove"/>
     // -> action "set" (the default) sets a named property (of the given type and scope) to the given
-    //    value; action "remove" clears it.
-    public record Property(Kind kind, String name, String type, String scope, String value, String action)
-            implements SynapseNode {
-        public Property(String name, String type, String scope, String value, String action) {
-            this(Kind.PROPERTY, name, type, scope, value, action);
+    //    value or expression (mutually exclusive; expression holds a Synapse XPath); action "remove"
+    //    clears it.
+    public record Property(Kind kind, String name, String type, String scope, String value,
+                           String expression, String action) implements SynapseNode {
+        public Property(String name, String type, String scope, String value, String expression, String action) {
+            this(Kind.PROPERTY, name, type, scope, value, expression, action);
+        }
+
+        public boolean hasExpression() {
+            return expression != null && !expression.isEmpty();
         }
     }
 

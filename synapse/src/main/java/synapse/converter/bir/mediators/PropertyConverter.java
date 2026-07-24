@@ -21,6 +21,9 @@ import common.BallerinaModel.Statement;
 import common.BallerinaModel.TypeDesc.BuiltinType;
 import synapse.converter.ScopeContext;
 import synapse.converter.bir.BIRConverter;
+import synapse.expression.SynapseExpressionEmitter;
+import synapse.expression.SynapseExpressionEmitter.ExpressionEval;
+import synapse.expression.SynapseExpressionParser;
 import synapse.model.Synapse.Property;
 import synapse.model.Synapse.SynapseNode;
 
@@ -39,6 +42,7 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
 
     private static final String TRANSPORT_SCOPE = "transport";
     private static final String AXIS2_SCOPE = "axis2";
+    private static final String HTTP_STATUS_PROPERTY = "HTTP_SC";
     private static final String DEFAULT_SCOPE = "default";
     private static final String SYNAPSE_SCOPE = "synapse";
     private static final String REMOVE_ACTION = "remove";
@@ -53,14 +57,23 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
             case TRANSPORT_SCOPE -> {
                 rejectRemoveAction(property);
                 context.ensureContextAvailable();
+                String value = property.hasExpression() ? resolve(property.expression(), false, context)
+                        : "\"" + property.value() + "\"";
                 context.statements().add(new Statement.BallerinaStatement(
-                        "ctx.headers[\"" + property.name() + "\"] = \"" + property.value() + "\";"));
+                        "ctx.headers[\"" + property.name() + "\"] = " + value + ";"));
             }
             case AXIS2_SCOPE -> {
                 rejectRemoveAction(property);
                 context.ensureContextAvailable();
-                context.statements().add(new Statement.BallerinaStatement(
-                        "ctx.statusCode = " + property.value() + ";"));
+                String value = property.hasExpression() ? resolve(property.expression(), false, context)
+                        : property.value();
+                if (HTTP_STATUS_PROPERTY.equalsIgnoreCase(property.name())) {
+                    context.statements().add(new Statement.BallerinaStatement(
+                            "ctx.statusCode = " + value + ";"));
+                } else {
+                    context.statements().add(new Statement.BallerinaStatement(
+                            "ctx.axis2[\"" + property.name() + "\"] = " + value + ";"));
+                }
             }
             case DEFAULT_SCOPE, SYNAPSE_SCOPE -> convertDefaultProperty(property, context);
             default -> throw new UnsupportedOperationException("The '" + property.scope()
@@ -83,8 +96,19 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
             return;
         }
         context.shared().addProperty(property.name(), toBallerinaType(property.type()), property.scope());
+        boolean hasExpression = property.hasExpression();
+        String value = resolve(hasExpression ? property.expression() : property.value(), !hasExpression, context);
         context.statements().add(new Statement.BallerinaStatement(
-                "ctx.variables." + property.name() + " = " + property.value() + ";"));
+                "ctx.variables." + property.name() + " = " + value + ";"));
+    }
+
+    private static String resolve(String raw, boolean isLiteral, ScopeContext context) {
+        ExpressionEval result = SynapseExpressionEmitter.emit(SynapseExpressionParser.parse(raw, isLiteral), raw);
+        result.warning().ifPresent(warning -> context.statements().add(new Statement.Comment(warning)));
+        if (result.requiresXmlData()) {
+            context.importStatements().add(SynapseExpressionEmitter.XML_DATA_IMPORT);
+        }
+        return result.value().toString();
     }
 
     private static String toBallerinaType(String synapseType) {
@@ -92,6 +116,8 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
             case "INTEGER", "INT", "LONG", "SHORT" -> "int";
             case "BOOLEAN" -> "boolean";
             case "DOUBLE", "FLOAT" -> "float";
+            case "OM" -> "xml";
+            case "JSON" -> "json";
             default -> "string";
         };
     }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="expr" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+    <property name="greeting" scope="default" type="STRING" value="&quot;Hi&quot;"/>
+    <property name="itemName" scope="default" type="STRING" expression="//items/name"/>
+    <property name="alias" scope="default" type="STRING" expression="$ctx:itemName"/>
+    <property name="detail" scope="default" type="STRING" expression="$ctx:itemName//detail"/>
+</sequence>

@@ -1,10 +1,10 @@
 import ballerina/http;
 
 public type Variables record {|
-    string barProp1?;
-    int barProp2?;
-    string before?;
-    string after?;
+    string greeting?;
+    string itemName?;
+    string alias?;
+    string detail?;
 |};
 
 public type Context record {|

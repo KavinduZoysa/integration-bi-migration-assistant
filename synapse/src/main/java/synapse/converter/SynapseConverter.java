@@ -90,6 +90,7 @@ public final class SynapseConverter {
     private static final String VARIABLES_FIELD = "variables";
     private static final String PAYLOAD_FIELD = "payload";
     private static final String HEADERS_FIELD = "headers";
+    private static final String AXIS2_FIELD = "axis2";
     private static final String STATUS_CODE_FIELD = "statusCode";
     private static final String CALLER_FIELD = "caller";
     private static final String REQUEST_PARAM = "request";
@@ -228,6 +229,8 @@ public final class SynapseConverter {
                 new RecordField(VARIABLES_FIELD, new BallerinaType(VARIABLES_TYPE)),
                 new RecordField(PAYLOAD_FIELD, BuiltinType.ANYDATA, new NilConstant()),
                 new RecordField(HEADERS_FIELD, new MapTypeDesc(BuiltinType.STRING),
+                        new MappingConstructor(List.of())),
+                new RecordField(AXIS2_FIELD, new MapTypeDesc(BuiltinType.ANYDATA),
                         new MappingConstructor(List.of())),
                 new RecordField(STATUS_CODE_FIELD, BuiltinType.INT, true),
                 new RecordField(CALLER_FIELD, new BallerinaType(HTTP_CALLER), true)))));

@@ -1,10 +1,12 @@
 import ballerina/http;
 
-function seq(Context ctx) returns error? {
-    ctx.variables.greeting = "Hello";
-    ctx.variables.count1 = 5;
-    ctx.variables.count2 = 50;
-    ctx.variables.enabled = true;
+import ballerina/data.xmldata;
+
+function expr(Context ctx) returns error? {
+    ctx.variables.greeting = "Hi";
+    ctx.variables.itemName = check xmldata:transform(<xml>ctx.payload, `//items/name`, string);
+    ctx.variables.alias = ctx.variables.itemName;
+    ctx.variables.detail = check xmldata:transform(<xml>ctx.variables.itemName, `//detail`, string);
 }
 
 function respond(Context ctx) returns error? {
