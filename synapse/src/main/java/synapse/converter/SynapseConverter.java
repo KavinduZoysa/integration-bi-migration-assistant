@@ -176,6 +176,7 @@ public final class SynapseConverter {
                 context.clearArtifactOutput();
             }
             addContextRecord(context);
+            context.converterFunctions().forEach(context::addFunction);
             addRespondFunction(context);
             addEmitPayloadFunction(context);
             if (dependencyGraph.sortedNodes().isEmpty() || !context.records().isEmpty()) {

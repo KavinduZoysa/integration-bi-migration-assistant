@@ -4,9 +4,13 @@ import ballerina/data.xmldata;
 
 function expr(Context ctx) returns error? {
     ctx.variables.greeting = "Hi";
-    ctx.variables.itemName = check xmldata:transform(<xml>ctx.payload, `//items/name`, string);
-    ctx.variables.alias = ctx.variables.itemName;
-    ctx.variables.detail = check xmldata:transform(<xml>ctx.variables.itemName, `//detail`, string);
+    ctx.variables.itemName = convertToString(check xmldata:transform(<xml>ctx.payload, `//items/name`, string));
+    ctx.variables.alias = convertToString(ctx.variables.itemName);
+    ctx.variables.detail = convertToString(check xmldata:transform(<xml>ctx.variables.itemName, `//detail`, string));
+}
+
+function convertToString(anydata v) returns string {
+    return v.toString();
 }
 
 function respond(Context ctx) returns error? {

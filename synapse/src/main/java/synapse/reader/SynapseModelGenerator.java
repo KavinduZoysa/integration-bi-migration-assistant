@@ -30,6 +30,7 @@ import synapse.model.Synapse.Respond;
 import synapse.model.Synapse.Sequence;
 import synapse.model.Synapse.SequenceMediator;
 import synapse.model.Synapse.SynapseNode;
+import synapse.model.SynapseType;
 
 import java.io.StringWriter;
 import java.util.ArrayList;
@@ -53,7 +54,6 @@ public class SynapseModelGenerator {
     private static final String PROPERTY_TAG = "property";
     private static final String FORMAT_TAG = "format";
 
-    private static final String DEFAULT_PROPERTY_TYPE = "string";
     private static final String DEFAULT_PROPERTY_SCOPE = "default";
     private static final String DEFAULT_PROPERTY_ACTION = "set";
 
@@ -180,10 +180,7 @@ public class SynapseModelGenerator {
     private static Property readProperty(Element element) {
         String name = element.getAttribute("name");
 
-        String type = element.getAttribute("type");
-        if (type.isEmpty()) {
-            type = DEFAULT_PROPERTY_TYPE;
-        }
+        SynapseType type = SynapseType.from(element.getAttribute("type"));
 
         String scope = element.getAttribute("scope");
         if (scope.isEmpty()) {

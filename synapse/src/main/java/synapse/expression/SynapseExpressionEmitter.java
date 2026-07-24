@@ -30,6 +30,7 @@ import synapse.expression.SynapseExpression.Literal;
 import synapse.expression.SynapseExpression.PropertyExpression;
 import synapse.expression.SynapseExpression.ScopeExpression;
 import synapse.expression.SynapseExpression.XPathExpression;
+import synapse.model.SynapseType;
 
 import java.util.Locale;
 import java.util.Optional;
@@ -83,27 +84,34 @@ public final class SynapseExpressionEmitter {
      *                        best-effort, if any
      * @param requiresXmlData whether the {@code ballerina/data.xmldata} import is
      *                        required
+     * @param literalType     the inferred type when the source expression is a
+     *                        literal
      */
-    public record ExpressionEval(Expression value, Optional<String> warning, boolean requiresXmlData) {
+    public record ExpressionEval(Expression value, Optional<String> warning, boolean requiresXmlData,
+                                 Optional<SynapseType> literalType) {
 
         static ExpressionEval of(Expression value) {
-            return new ExpressionEval(value, Optional.empty(), false);
+            return new ExpressionEval(value, Optional.empty(), false, Optional.empty());
+        }
+
+        static ExpressionEval literal(Expression value, SynapseType type) {
+            return new ExpressionEval(value, Optional.empty(), false, Optional.of(type));
         }
 
         static ExpressionEval transform(Expression value) {
-            return new ExpressionEval(value, Optional.empty(), true);
+            return new ExpressionEval(value, Optional.empty(), true, Optional.empty());
         }
 
         static ExpressionEval unsupported(String raw, String reason) {
             return new ExpressionEval(new StringConstant(raw), Optional.of("TODO: " + reason + ": '" + raw + "'"),
-                    false);
+                    false, Optional.empty());
         }
     }
 
     @NotNull
     public static ExpressionEval emit(SynapseExpression expression, String raw) {
         return switch (expression) {
-            case Literal literal -> ExpressionEval.of(emitLiteral(literal));
+            case Literal literal -> ExpressionEval.literal(emitLiteral(literal), typeOf(literal));
             case ScopeExpression scope -> resolveScopeExpression(scope.scope())
                     .map(val -> ExpressionEval.of(val))
                     .orElseGet(() -> ExpressionEval.unsupported(raw, "unsupported Synapse scope in expression"));
@@ -122,6 +130,17 @@ public final class SynapseExpressionEmitter {
             // constructor.
             case INT, FLOAT, BOOLEAN, JSON -> new BallerinaExpression(literal.value());
             case OM -> new XMLTemplate(literal.value());
+        };
+    }
+
+    private static SynapseType typeOf(Literal literal) {
+        return switch (literal.kind()) {
+            case STRING -> SynapseType.STRING;
+            case INT -> SynapseType.INTEGER;
+            case FLOAT -> SynapseType.FLOAT;
+            case BOOLEAN -> SynapseType.BOOLEAN;
+            case JSON -> SynapseType.JSON;
+            case OM -> SynapseType.OM;
         };
     }
 

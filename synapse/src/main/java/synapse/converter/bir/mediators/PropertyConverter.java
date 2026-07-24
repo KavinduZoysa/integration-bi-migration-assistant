@@ -20,14 +20,14 @@ package synapse.converter.bir.mediators;
 import common.BallerinaModel.Statement;
 import common.BallerinaModel.TypeDesc.BuiltinType;
 import synapse.converter.ScopeContext;
+import synapse.converter.TypeConverter;
 import synapse.converter.bir.BIRConverter;
 import synapse.expression.SynapseExpressionEmitter;
 import synapse.expression.SynapseExpressionEmitter.ExpressionEval;
 import synapse.expression.SynapseExpressionParser;
 import synapse.model.Synapse.Property;
 import synapse.model.Synapse.SynapseNode;
-
-import java.util.Locale;
+import synapse.model.SynapseType;
 
 /**
  * Converts a Synapse {@code <property>} mediator. How a property is converted
@@ -57,7 +57,9 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
             case TRANSPORT_SCOPE -> {
                 rejectRemoveAction(property);
                 context.ensureContextAvailable();
-                String value = property.hasExpression() ? resolve(property.expression(), false, context)
+                // A transport header is a string slot, so an expression is coerced to string.
+                String value = property.hasExpression()
+                        ? resolveExpression(property.expression(), false, SynapseType.STRING, context)
                         : "\"" + property.value() + "\"";
                 context.statements().add(new Statement.BallerinaStatement(
                         "ctx.headers[\"" + property.name() + "\"] = " + value + ";"));
@@ -65,12 +67,19 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
             case AXIS2_SCOPE -> {
                 rejectRemoveAction(property);
                 context.ensureContextAvailable();
-                String value = property.hasExpression() ? resolve(property.expression(), false, context)
-                        : property.value();
                 if (HTTP_STATUS_PROPERTY.equalsIgnoreCase(property.name())) {
+                    // The status code is an int slot, so an expression is coerced to int.
+                    String value = property.hasExpression()
+                            ? resolveExpression(property.expression(), false, SynapseType.INTEGER, context)
+                            : property.value();
                     context.statements().add(new Statement.BallerinaStatement(
                             "ctx.statusCode = " + value + ";"));
                 } else {
+                    // A generic axis2 property lands in a map<anydata> slot, which accepts any value, so
+                    // no type conversion is applied.
+                    String value = property.hasExpression()
+                            ? emitExpression(property.expression(), false, context).value().toString()
+                            : property.value();
                     context.statements().add(new Statement.BallerinaStatement(
                             "ctx.axis2[\"" + property.name() + "\"] = " + value + ";"));
                 }
@@ -97,27 +106,48 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
         }
         context.shared().addProperty(property.name(), toBallerinaType(property.type()), property.scope());
         boolean hasExpression = property.hasExpression();
-        String value = resolve(hasExpression ? property.expression() : property.value(), !hasExpression, context);
+        String value = resolveExpression(hasExpression ? property.expression() : property.value(), !hasExpression,
+                property.type(), context);
         context.statements().add(new Statement.BallerinaStatement(
                 "ctx.variables." + property.name() + " = " + value + ";"));
     }
 
-    private static String resolve(String raw, boolean isLiteral, ScopeContext context) {
+    private static String resolveExpression(String raw, boolean isLiteral, SynapseType expectedType,
+                                            ScopeContext context) {
+        ExpressionEval result = emitExpression(raw, isLiteral, context);
+        return convertExpression(result, expectedType, context);
+    }
+
+    private static ExpressionEval emitExpression(String raw, boolean isLiteral, ScopeContext context) {
         ExpressionEval result = SynapseExpressionEmitter.emit(SynapseExpressionParser.parse(raw, isLiteral), raw);
         result.warning().ifPresent(warning -> context.statements().add(new Statement.Comment(warning)));
         if (result.requiresXmlData()) {
             context.importStatements().add(SynapseExpressionEmitter.XML_DATA_IMPORT);
         }
-        return result.value().toString();
+        return result;
     }
 
-    private static String toBallerinaType(String synapseType) {
-        return switch (synapseType.toUpperCase(Locale.ROOT)) {
-            case "INTEGER", "INT", "LONG", "SHORT" -> "int";
-            case "BOOLEAN" -> "boolean";
-            case "DOUBLE", "FLOAT" -> "float";
-            case "OM" -> "xml";
-            case "JSON" -> "json";
+    private static String convertExpression(ExpressionEval result, SynapseType expectedType, ScopeContext context) {
+        String expression = result.value().toString();
+        // An unsupported expression is emitted as a best-effort placeholder (already flagged with a
+        // warning), so it is left unconverted.
+        if (result.warning().isPresent()) {
+            return expression;
+        }
+        if (result.literalType().isPresent()) {
+            return TypeConverter.convertLiteral(expression, result.literalType().get(), expectedType,
+                    context.shared());
+        }
+        return TypeConverter.convertAnyData(expression, expectedType, context.shared());
+    }
+
+    private static String toBallerinaType(SynapseType synapseType) {
+        return switch (synapseType) {
+            case INTEGER, INT, LONG, SHORT -> "int";
+            case BOOLEAN -> "boolean";
+            case DOUBLE, FLOAT -> "float";
+            case OM -> "xml";
+            case JSON -> "json";
             default -> "string";
         };
     }

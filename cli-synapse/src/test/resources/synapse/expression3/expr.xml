@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="convert" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+    <!-- Seed variables of various types, read back below as non-literal expressions. -->
+    <property name="strVar" scope="default" type="STRING" value="hello"/>
+    <property name="intVar" scope="default" type="INTEGER" value="42"/>
+
+    <!-- Case 1: literal source, typed converters. A quoted value is a string literal. -->
+    <property name="intFromString" scope="default" type="INTEGER" value="&quot;123&quot;"/>
+    <property name="floatFromString" scope="default" type="DOUBLE" value="&quot;2.5&quot;"/>
+    <property name="boolFromString" scope="default" type="BOOLEAN" value="&quot;true&quot;"/>
+    <property name="xmlFromString" scope="default" type="OM" value="&quot;&lt;a/&gt;&quot;"/>
+    <property name="intFromFloat" scope="default" type="INTEGER" value="2.5"/>
+    <property name="intFromBool" scope="default" type="INTEGER" value="true"/>
+
+    <!-- Case 2: non-literal source, anydata converters (one per target type). -->
+    <property name="stringFromAny" scope="default" type="STRING" expression="$ctx:intVar"/>
+    <property name="intFromAny" scope="default" type="INTEGER" expression="$ctx:strVar"/>
+    <property name="floatFromAny" scope="default" type="DOUBLE" expression="$ctx:strVar"/>
+    <property name="boolFromAny" scope="default" type="BOOLEAN" expression="$ctx:strVar"/>
+    <property name="xmlFromAny" scope="default" type="OM" expression="$ctx:strVar"/>
+    <property name="jsonFromAny" scope="default" type="JSON" expression="$ctx:strVar"/>
+</sequence>

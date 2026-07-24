@@ -21,6 +21,7 @@ import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 import synapse.expression.SynapseExpression.Literal;
 import synapse.expression.SynapseExpressionEmitter.ExpressionEval;
+import synapse.model.SynapseType;
 
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -99,6 +100,24 @@ public class SynapseExpressionTest {
         SynapseExpression parsed = SynapseExpressionParser.parse(expression, true);
         assertTrue(parsed instanceof Literal, "'" + expression + "' should parse as a literal");
         assertEquals(((Literal) parsed).kind(), expectedKind);
+    }
+
+    @Test(dataProvider = "literalKindCases")
+    public void emittedLiteralCarriesType(String expression, Literal.Kind expectedKind) {
+        SynapseExpression parsed = SynapseExpressionParser.parse(expression, true);
+        ExpressionEval result = SynapseExpressionEmitter.emit(parsed, expression);
+        assertEquals(result.literalType(), java.util.Optional.of(toSynapseType(expectedKind)));
+    }
+
+    private static SynapseType toSynapseType(Literal.Kind kind) {
+        return switch (kind) {
+            case STRING -> SynapseType.STRING;
+            case INT -> SynapseType.INTEGER;
+            case FLOAT -> SynapseType.FLOAT;
+            case BOOLEAN -> SynapseType.BOOLEAN;
+            case JSON -> SynapseType.JSON;
+            case OM -> SynapseType.OM;
+        };
     }
 
     @DataProvider

@@ -78,9 +78,9 @@ public record Synapse() {
     // -> action "set" (the default) sets a named property (of the given type and scope) to the given
     //    value or expression (mutually exclusive; expression holds a Synapse XPath); action "remove"
     //    clears it.
-    public record Property(Kind kind, String name, String type, String scope, String value,
+    public record Property(Kind kind, String name, SynapseType type, String scope, String value,
                            String expression, String action) implements SynapseNode {
-        public Property(String name, String type, String scope, String value, String expression, String action) {
+        public Property(String name, SynapseType type, String scope, String value, String expression, String action) {
             this(Kind.PROPERTY, name, type, scope, value, expression, action);
         }
 
