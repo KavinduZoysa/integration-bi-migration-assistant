@@ -36,6 +36,7 @@ import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.xml.XMLConstants;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
@@ -220,7 +221,9 @@ public class SynapseModelGenerator {
 
     private static String serializeElement(Element element) {
         try {
-            Transformer transformer = TransformerFactory.newInstance().newTransformer();
+            TransformerFactory factory = TransformerFactory.newInstance();
+            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            Transformer transformer = factory.newTransformer();
             transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
             StringWriter writer = new StringWriter();
             transformer.transform(new DOMSource(element), new StreamResult(writer));

@@ -15,6 +15,7 @@ public type Variables record {|
     boolean boolFromAny?;
     xml xmlFromAny?;
     json jsonFromAny?;
+    int unsupported?;
 |};
 
 public type Context record {|

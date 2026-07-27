@@ -33,7 +33,7 @@ import java.util.stream.Stream;
  */
 public final class TestUtils {
 
-    private static final boolean UPDATE_EXPECTED = true;
+    private static final boolean UPDATE_EXPECTED = false;
 
     private TestUtils() {
     }

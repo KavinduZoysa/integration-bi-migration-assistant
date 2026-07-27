@@ -15,6 +15,7 @@ function convert(Context ctx) returns error? {
     ctx.variables.boolFromAny = check convertToBoolean(ctx.variables.strVar);
     ctx.variables.xmlFromAny = check convertToXml(ctx.variables.strVar);
     ctx.variables.jsonFromAny = check convertToJson(ctx.variables.strVar);
+    // TODO: unsupported Synapse scope in expression: '$query:q'
 }
 
 function stringToInt(string v) returns int|error {

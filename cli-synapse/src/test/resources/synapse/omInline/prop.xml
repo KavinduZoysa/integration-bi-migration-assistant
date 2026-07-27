@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="omInline" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+    <property name="xxx" scope="default" type="OM">
+        <book>
+            <name>A Study in Scarlet</name>
+            <author>
+                <name>Arthur Conan Doyle</name>
+            </author>
+        </book>
+    </property>
+</sequence>
