@@ -191,12 +191,14 @@ public class SynapseModelGenerator {
         String value = element.getAttribute("value");
         String expression = element.getAttribute("expression");
 
-        // An OM property carries its value as a child element (e.g. <property ...><foo>bar</foo></property>)
-        // rather than a value/expression attribute; serialize it so it flows through the literal handler.
+        // A property carrying its value as an inline XML child element (e.g.
+        // <property ...><foo>bar</foo></property>) is an OM value regardless of the declared type;
+        // capture the serialized child so the converter emits it as an xml literal.
+        String omElement = "";
         if (value.isEmpty() && expression.isEmpty()) {
             List<Element> children = childElements(element);
             if (!children.isEmpty()) {
-                value = serializeElement(children.get(0));
+                omElement = serializeElement(children.get(0));
             }
         }
 
@@ -205,7 +207,7 @@ public class SynapseModelGenerator {
             action = DEFAULT_PROPERTY_ACTION;
         }
 
-        return new Property(name, type, scope, value, expression, action);
+        return new Property(name, type, scope, value, expression, omElement, action);
     }
 
     private static PayloadFactory readPayloadFactory(Element element) {

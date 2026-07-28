@@ -74,18 +74,24 @@ public record Synapse() {
     }
 
     // <property name="..." scope="default|transport|axis2|axis2-client" type="string" value="..."
-    //           expression="..." action="set|remove"/>
+    //           expression="..." action="set|remove"> <om-element/>? </property>
     // -> action "set" (the default) sets a named property (of the given type and scope) to the given
-    //    value or expression (mutually exclusive; expression holds a Synapse XPath); action "remove"
-    //    clears it.
+    //    value or expression (mutually exclusive; expression holds a Synapse XPath), or to the inline XML
+    //    child element carried in omElement; action "remove" clears it. A present omElement makes the
+    //    property an XML (OM) value regardless of the declared type.
     public record Property(Kind kind, String name, SynapseType type, String scope, String value,
-                           String expression, String action) implements SynapseNode {
-        public Property(String name, SynapseType type, String scope, String value, String expression, String action) {
-            this(Kind.PROPERTY, name, type, scope, value, expression, action);
+                           String expression, String omElement, String action) implements SynapseNode {
+        public Property(String name, SynapseType type, String scope, String value, String expression,
+                        String omElement, String action) {
+            this(Kind.PROPERTY, name, type, scope, value, expression, omElement, action);
         }
 
         public boolean hasExpression() {
             return expression != null && !expression.isEmpty();
+        }
+
+        public boolean hasOmElement() {
+            return omElement != null && !omElement.isEmpty();
         }
     }
 

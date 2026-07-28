@@ -2,6 +2,7 @@ import ballerina/http;
 
 public type Variables record {|
     xml xxx?;
+    xml yyy?;
 |};
 
 public type Context record {|

@@ -22,6 +22,7 @@ import common.BallerinaModel.Parameter;
 import common.BallerinaModel.Statement;
 import common.BallerinaModel.Statement.BallerinaStatement;
 import common.BallerinaModel.TypeDesc.BallerinaType;
+import synapse.expression.SynapseExpressionEmitter;
 import synapse.model.SynapseType;
 
 import java.util.Arrays;
@@ -108,6 +109,15 @@ public final class TypeConverter {
         Converter converter = anyDataConverter("convertTo" + tgt.capitalized(), tgt);
         context.addConverterFunction(converter.function());
         return call(converter, expr);
+    }
+
+    /**
+     * Registers the {@code convertToXml(anydata)} helper the emitter uses to coerce an XPath root to
+     * {@code xml}. The call site itself is built by the emitter; this only ensures the function exists.
+     */
+    public static void requireConvertToXml(ConversionContext context) {
+        context.addConverterFunction(
+                anyDataConverter(SynapseExpressionEmitter.CONVERT_TO_XML_FUNCTION, BalType.XML).function());
     }
 
     private static boolean assignsDirectly(BalType src, BalType tgt) {

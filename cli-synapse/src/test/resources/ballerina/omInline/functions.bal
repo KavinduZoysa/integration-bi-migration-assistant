@@ -7,6 +7,9 @@ function omInline(Context ctx) returns error? {
                 <name>Arthur Conan Doyle</name>
             </author>
         </book>`;
+    ctx.variables.yyy = xml `<book xmlns="http://ws.apache.org/ns/synapse">
+            <name>The Sign of Four</name>
+        </book>`;
 }
 
 function respond(Context ctx) returns error? {

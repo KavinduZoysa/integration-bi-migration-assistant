@@ -108,12 +108,16 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
                     "ctx.variables." + property.name() + " = " + BuiltinType.NIL + ";"));
             return;
         }
-        context.shared().addProperty(property.name(), toBallerinaType(property.type()), property.scope());
-        if (isInlineXml(property)) {
+        if (property.hasOmElement()) {
+            // An inline XML child element makes the property an xml value, regardless of the declared
+            // type. It is emitted as an xml template literal, which carries the multi-line, quoted
+            // content verbatim (a string literal could neither hold nor type-check it).
+            context.shared().addProperty(property.name(), toBallerinaType(SynapseType.OM), property.scope());
             context.statements().add(new Statement.BallerinaStatement(
-                    "ctx.variables." + property.name() + " = " + new XMLTemplate(property.value()) + ";"));
+                    "ctx.variables." + property.name() + " = " + new XMLTemplate(property.omElement()) + ";"));
             return;
         }
+        context.shared().addProperty(property.name(), toBallerinaType(property.type()), property.scope());
         resolveExpression(rawValue(property), !property.hasExpression(), property.type(), context).ifPresent(value ->
                 context.statements().add(new Statement.BallerinaStatement(
                         "ctx.variables." + property.name() + " = " + value + ";")));
@@ -122,14 +126,6 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
     // The raw text to convert: the expression when present, otherwise the literal value.
     private static String rawValue(Property property) {
         return property.hasExpression() ? property.expression() : property.value();
-    }
-
-    // Whether an OM property holds inline XML — a child element the reader serialized into the value.
-    // Such content is emitted as an xml template literal, which carries multi-line and quoted content
-    // verbatim, rather than through the string-literal path (which would not escape it or type-check).
-    private static boolean isInlineXml(Property property) {
-        return property.type() == SynapseType.OM && !property.hasExpression()
-                && property.value().stripLeading().startsWith("<");
     }
 
     // Emits the Synapse expression and converts it to expectedType, returning the Ballerina to assign.
@@ -155,6 +151,8 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
         result.warning().ifPresent(warning -> context.statements().add(new Statement.Comment(warning)));
         if (result.requiresXmlData()) {
             context.importStatements().add(SynapseExpressionEmitter.XML_DATA_IMPORT);
+            // The XPath transform coerces its root via convertToXml; ensure that helper is emitted.
+            TypeConverter.requireConvertToXml(context.shared());
         }
         return result;
     }

@@ -64,6 +64,10 @@ public final class SynapseExpressionEmitter {
 
     public static final Import XML_DATA_IMPORT = new Import("ballerina", "data.xmldata");
 
+    // The anydata -> xml converter used to coerce an XPath root. Matches the name TypeConverter generates
+    // for an OM target, so the two dedupe to a single generated function.
+    public static final String CONVERT_TO_XML_FUNCTION = "convertToXml";
+
     private static final String CONTEXT_VAR = "ctx";
     private static final String VARIABLES_FIELD = "variables";
     private static final String PAYLOAD_FIELD = "payload";
@@ -191,9 +195,11 @@ public final class SynapseExpressionEmitter {
         return Optional.empty();
     }
 
-    // TODO: We may have to convert ballerina expression to xml before passing to xmldata:transform.
+    // Coerces the root to xml via convertToXml (rather than an unchecked <xml> cast, which would panic on
+    // a non-xml value) before evaluating the XPath through data.xmldata:transform.
     private static Expression genXPathExpr(Expression root, String xpath) {
-        String call = "xmldata:transform(<xml>" + root + ", `" + xpath + "`, " + STRING_TYPE + ")";
+        String call = "xmldata:transform(check " + CONVERT_TO_XML_FUNCTION + "(" + root + "), `"
+                + xpath + "`, " + STRING_TYPE + ")";
         return new Check(new BallerinaExpression(call));
     }
 

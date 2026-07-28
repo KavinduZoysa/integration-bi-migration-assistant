@@ -75,13 +75,15 @@ public class SynapseExpressionTest {
                 { "$trp:Host", "ctx.headers[\"Host\"]", false },
                 { "$axis2:HTTP_SC", "ctx.statusCode", false },
                 // XPathExpression: an XPath over a property.
-                { "$ctx:prop1//name", "check xmldata:transform(<xml>ctx.variables.prop1, `//name`, string)", true },
+                { "$ctx:prop1//name",
+                        "check xmldata:transform(check convertToXml(ctx.variables.prop1), `//name`, string)", true },
                 // XPathExpression: a bare XPath, implicitly rooted at the payload.
-                { "//items", "check xmldata:transform(<xml>ctx.payload, `//items`, string)", true },
-                { "$body//items", "check xmldata:transform(<xml>ctx.payload, `//items`, string)", true },
-                { "$trp:Host//x", "check xmldata:transform(<xml>ctx.headers[\"Host\"], `//x`, string)", true },
+                { "//items", "check xmldata:transform(check convertToXml(ctx.payload), `//items`, string)", true },
+                { "$body//items", "check xmldata:transform(check convertToXml(ctx.payload), `//items`, string)", true },
+                { "$trp:Host//x",
+                        "check xmldata:transform(check convertToXml(ctx.headers[\"Host\"]), `//x`, string)", true },
                 { "$axis2:HTTP_SC//x",
-                        "check xmldata:transform(<xml>ctx.axis2[\"HTTP_SC\"], `//x`, string)", true },
+                        "check xmldata:transform(check convertToXml(ctx.axis2[\"HTTP_SC\"]), `//x`, string)", true },
         };
     }
 

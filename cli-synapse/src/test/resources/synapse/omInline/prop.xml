@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <sequence name="omInline" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+    <!-- Case 3 (happy path): type="OM" with an inline XML child -> xml. -->
     <property name="xxx" scope="default" type="OM">
         <book>
             <name>A Study in Scarlet</name>
             <author>
                 <name>Arthur Conan Doyle</name>
             </author>
+        </book>
+    </property>
+    <!-- Case 4: an inline XML child makes the property xml even though type="INTEGER". -->
+    <property name="yyy" scope="default" type="INTEGER">
+        <book>
+            <name>The Sign of Four</name>
         </book>
     </property>
 </sequence>
