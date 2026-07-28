@@ -30,9 +30,19 @@ import synapse.model.Synapse.Respond;
 import synapse.model.Synapse.Sequence;
 import synapse.model.Synapse.SequenceMediator;
 import synapse.model.Synapse.SynapseNode;
+import synapse.model.SynapseType;
 
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
+
+import javax.xml.XMLConstants;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 
 public class SynapseModelGenerator {
 
@@ -45,7 +55,6 @@ public class SynapseModelGenerator {
     private static final String PROPERTY_TAG = "property";
     private static final String FORMAT_TAG = "format";
 
-    private static final String DEFAULT_PROPERTY_TYPE = "string";
     private static final String DEFAULT_PROPERTY_SCOPE = "default";
     private static final String DEFAULT_PROPERTY_ACTION = "set";
 
@@ -172,10 +181,7 @@ public class SynapseModelGenerator {
     private static Property readProperty(Element element) {
         String name = element.getAttribute("name");
 
-        String type = element.getAttribute("type");
-        if (type.isEmpty()) {
-            type = DEFAULT_PROPERTY_TYPE;
-        }
+        SynapseType type = SynapseType.from(element.getAttribute("type"));
 
         String scope = element.getAttribute("scope");
         if (scope.isEmpty()) {
@@ -183,13 +189,25 @@ public class SynapseModelGenerator {
         }
 
         String value = element.getAttribute("value");
+        String expression = element.getAttribute("expression");
+
+        // A property carrying its value as an inline XML child element (e.g.
+        // <property ...><foo>bar</foo></property>) is an OM value regardless of the declared type;
+        // capture the serialized child so the converter emits it as an xml literal.
+        String omElement = "";
+        if (value.isEmpty() && expression.isEmpty()) {
+            List<Element> children = childElements(element);
+            if (!children.isEmpty()) {
+                omElement = serializeElement(children.get(0));
+            }
+        }
 
         String action = element.getAttribute("action");
         if (action.isEmpty()) {
             action = DEFAULT_PROPERTY_ACTION;
         }
 
-        return new Property(name, type, scope, value, action);
+        return new Property(name, type, scope, value, expression, omElement, action);
     }
 
     private static PayloadFactory readPayloadFactory(Element element) {
@@ -201,6 +219,20 @@ public class SynapseModelGenerator {
             }
         }
         return new PayloadFactory(mediaType, format);
+    }
+
+    private static String serializeElement(Element element) {
+        try {
+            TransformerFactory factory = TransformerFactory.newInstance();
+            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            Transformer transformer = factory.newTransformer();
+            transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
+            StringWriter writer = new StringWriter();
+            transformer.transform(new DOMSource(element), new StreamResult(writer));
+            return writer.toString().trim();
+        } catch (TransformerException e) {
+            throw new IllegalStateException("Failed to serialize property element", e);
+        }
     }
 
     private static List<Element> childElements(Element parent) {

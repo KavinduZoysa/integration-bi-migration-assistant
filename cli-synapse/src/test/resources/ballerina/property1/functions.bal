@@ -2,7 +2,8 @@ import ballerina/http;
 
 function seq(Context ctx) returns error? {
     ctx.variables.greeting = "Hello";
-    ctx.variables.count = 5;
+    ctx.variables.count1 = 5;
+    ctx.variables.count2 = 50.toString();
     ctx.variables.enabled = true;
 }
 

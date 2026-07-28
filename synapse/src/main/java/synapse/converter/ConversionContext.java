@@ -65,6 +65,7 @@ public class ConversionContext {
     private final Map<String, SequenceMetadata> sequenceMetadata = new HashMap<>();
     private final Map<String, Set<Import>> importsByFile = new HashMap<>();
     private final Map<String, PropertyInfo> properties = new LinkedHashMap<>();
+    private final Map<String, Function> converterFunctions = new LinkedHashMap<>();
 
     private DependencyGraph dependencyGraph;
 
@@ -90,6 +91,21 @@ public class ConversionContext {
 
     public List<Function> functions() {
         return functions;
+    }
+
+    /**
+     * Registers a type-conversion helper function (e.g. {@code convertToInt}, {@code stringToInt}) that a
+     * property conversion needs, keyed by its name so the same converter requested by many properties is
+     * emitted once. Populated while artifacts are converted and preserved across
+     * {@link #clearArtifactOutput()}, since the converters are flushed into {@code functions.bal} in a
+     * single final pass alongside {@code respond} / {@code emitPayload}.
+     */
+    public void addConverterFunction(Function function) {
+        converterFunctions.putIfAbsent(function.functionName(), function);
+    }
+
+    public Collection<Function> converterFunctions() {
+        return converterFunctions.values();
     }
 
     public void addRecord(ModuleTypeDef record) {
