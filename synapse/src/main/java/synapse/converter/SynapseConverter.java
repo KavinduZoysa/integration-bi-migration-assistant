@@ -38,11 +38,14 @@ import common.BallerinaModel.TypeDesc.RecordTypeDesc.RecordField;
 import common.BallerinaModel.TypeDesc.UnionTypeDesc;
 import org.jetbrains.annotations.NotNull;
 import synapse.converter.ConversionContext.PropertyInfo;
+import synapse.converter.ConversionContext.UnsupportedEntry;
 import synapse.converter.bir.APIConverter;
 import synapse.converter.bir.BIRConverter;
 import synapse.converter.bir.SequenceConverter;
+import synapse.converter.report.MigrationReport;
 import synapse.model.DependencyGraph;
 import synapse.model.DependencyGraph.ArtifactNode;
+import synapse.model.DependencyGraph.UnsupportedArtifactEntry;
 import synapse.model.DependencyResolver;
 import synapse.model.Synapse.Kind;
 import synapse.model.Synapse.SynapseNode;
@@ -101,6 +104,8 @@ public final class SynapseConverter {
     private static final String ERROR_OPTIONAL = "error?";
     private static final String DEFAULT_SCOPE = "default";
     private static final String SYNAPSE_SCOPE = "synapse";
+    private static final String REPORT_FILE = "migration_report.md";
+    private static final String UNSUPPORTED_ARTIFACT_CATEGORY = "Unsupported artifact";
 
     private static final Logger LOG = Logger.getLogger(SynapseConverter.class.getName());
 
@@ -154,11 +159,16 @@ public final class SynapseConverter {
         ConversionContext context = new ConversionContext();
         context.setDependencyGraph(dependencyGraph);
 
+        Path sourceRoot = sourceRoot(sourcePath);
+        registerUnsupportedArtifacts(dependencyGraph, context, sourceRoot);
+
         if (dryRun) {
             for (ArtifactNode artifactNode : dependencyGraph.sortedNodes()) {
+                context.setCurrentFile(relativePath(sourceRoot, artifactNode.file()));
                 convertArtifact(artifactNode, context);
                 context.clearArtifactOutput();
             }
+            printReport(context);
             return;
         }
 
@@ -171,6 +181,7 @@ public final class SynapseConverter {
 
             Map<Path, Set<Import>> writtenImports = new HashMap<>();
             for (ArtifactNode artifactNode : dependencyGraph.sortedNodes()) {
+                context.setCurrentFile(relativePath(sourceRoot, artifactNode.file()));
                 convertArtifact(artifactNode, context);
                 writeArtifacts(targetDir, context, writtenImports);
                 context.clearArtifactOutput();
@@ -185,8 +196,58 @@ public final class SynapseConverter {
                 // properties have been collected.
                 writeArtifacts(targetDir, context, writtenImports);
             }
+            writeReport(targetDir, context);
         } catch (IOException e) {
             throw new RuntimeException("Error while writing the Ballerina package: ", e);
+        }
+    }
+
+    /**
+     * Registers every unsupported top-level artifact (e.g. {@code <proxy>}) collected while building the
+     * dependency graph, so it appears in the migration report. Such artifacts have no Ballerina
+     * construct to host an inline to-do, so the report is their only surfacing point.
+     */
+    private static void registerUnsupportedArtifacts(DependencyGraph dependencyGraph, ConversionContext context,
+                                                     Path sourceRoot) {
+        for (UnsupportedArtifactEntry artifact : dependencyGraph.unsupportedArtifacts()) {
+            context.reportUnsupported(new UnsupportedEntry(UNSUPPORTED_ARTIFACT_CATEGORY, artifact.tag(),
+                    relativePath(sourceRoot, artifact.file()),
+                    "Top-level '<" + artifact.tag() + ">' artifact is not supported; manual conversion required.",
+                    artifact.rawXml()));
+        }
+    }
+
+    private static void writeReport(Path targetDir, ConversionContext context) throws IOException {
+        if (context.unsupported().isEmpty()) {
+            return;
+        }
+        Files.writeString(targetDir.resolve(REPORT_FILE), MigrationReport.render(context.unsupported()));
+    }
+
+    private static void printReport(ConversionContext context) {
+        if (context.unsupported().isEmpty()) {
+            return;
+        }
+        LOG.info(System.lineSeparator() + MigrationReport.render(context.unsupported()));
+    }
+
+    private static Path sourceRoot(String sourcePath) {
+        Path source = Paths.get(sourcePath);
+        return Files.isDirectory(source) ? source : source.getParent();
+    }
+
+    @NotNull
+    private static String relativePath(Path sourceRoot, Path file) {
+        if (file == null) {
+            return "";
+        }
+        if (sourceRoot == null) {
+            return file.getFileName().toString();
+        }
+        try {
+            return sourceRoot.relativize(file).toString();
+        } catch (IllegalArgumentException e) {
+            return file.toString();
         }
     }
 

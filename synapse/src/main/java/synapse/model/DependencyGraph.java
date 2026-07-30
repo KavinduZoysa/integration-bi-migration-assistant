@@ -17,10 +17,12 @@
  */
 package synapse.model;
 
+import org.jetbrains.annotations.NotNull;
 import synapse.model.Synapse.Api;
 import synapse.model.Synapse.Kind;
 import synapse.model.Synapse.Sequence;
 import synapse.model.Synapse.SynapseNode;
+import synapse.model.Synapse.UnsupportedArtifact;
 import synapse.reader.SynapseConfigReader;
 
 import java.io.File;
@@ -38,17 +40,21 @@ public class DependencyGraph {
     private final List<ArtifactNode> sortedNodes;
     private final List<List<ArtifactNode>> cycles;
     private final List<ArtifactNode> unresolvedNodes;
+    private final List<UnsupportedArtifactEntry> unsupportedArtifacts;
 
     public DependencyGraph(Map<ArtifactNode, List<ArtifactNode>> nodes, List<ArtifactNode> sortedNodes,
-                           List<List<ArtifactNode>> cycles, List<ArtifactNode> unresolvedNodes) {
+                           List<List<ArtifactNode>> cycles, List<ArtifactNode> unresolvedNodes,
+                           List<UnsupportedArtifactEntry> unsupportedArtifacts) {
         this.nodes = nodes;
         this.sortedNodes = sortedNodes;
         this.cycles = cycles;
         this.unresolvedNodes = unresolvedNodes;
+        this.unsupportedArtifacts = unsupportedArtifacts;
     }
 
     public static DependencyGraph buildDependencyGraph(List<File> artifactFiles) {
-        List<ArtifactNode> artifactNodes = collectArtifactNodes(artifactFiles);
+        List<UnsupportedArtifactEntry> unsupportedArtifacts = new ArrayList<>();
+        List<ArtifactNode> artifactNodes = collectArtifactNodes(artifactFiles, unsupportedArtifacts);
         DependencyResolver resolver = new DependencyResolver(artifactNodes);
 
         Map<ArtifactNode, List<ArtifactNode>> nodes = new LinkedHashMap<>();
@@ -58,15 +64,21 @@ public class DependencyGraph {
         TopologicalSorter sorter = new TopologicalSorter(nodes);
         sorter.sort();
         return new DependencyGraph(nodes, sorter.sorted(), sorter.cycles(),
-                new ArrayList<>(resolver.unresolvedNodes()));
+                new ArrayList<>(resolver.unresolvedNodes()), unsupportedArtifacts);
     }
 
-    private static List<ArtifactNode> collectArtifactNodes(List<File> artifactFiles) {
+    private static List<ArtifactNode> collectArtifactNodes(List<File> artifactFiles,
+                                                           List<UnsupportedArtifactEntry> unsupportedArtifacts) {
         List<ArtifactNode> nodes = new ArrayList<>();
         for (File artifact : artifactFiles) {
             Path file = artifact.toPath();
             for (SynapseNode node : SynapseConfigReader.parse(artifact)) {
-                artifactNode(node, file).ifPresent(nodes::add);
+                if (node instanceof UnsupportedArtifact unsupported) {
+                    unsupportedArtifacts.add(new UnsupportedArtifactEntry(unsupported.tag(), unsupported.name(),
+                            file, unsupported.rawXml()));
+                } else {
+                    artifactNode(node, file).ifPresent(nodes::add);
+                }
             }
         }
         return nodes;
@@ -98,7 +110,17 @@ public class DependencyGraph {
         return unresolvedNodes;
     }
 
+    @NotNull
+    public List<UnsupportedArtifactEntry> unsupportedArtifacts() {
+        return unsupportedArtifacts;
+    }
+
     public record ArtifactNode(String id, String name, Kind kind, Path file) {
+    }
+
+    // A top-level artifact with no Ballerina translation (e.g. <proxy>, <endpoint>), captured with its
+    // source file and verbatim XML so the migration report can surface it as a to-do.
+    public record UnsupportedArtifactEntry(String tag, String name, Path file, String rawXml) {
     }
 
     /**

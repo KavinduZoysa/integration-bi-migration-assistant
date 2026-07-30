@@ -20,6 +20,7 @@ package synapse.converter.bir.mediators;
 import common.BallerinaModel.Expression.XMLTemplate;
 import common.BallerinaModel.Statement;
 import common.BallerinaModel.TypeDesc.BuiltinType;
+import synapse.converter.ConversionContext.UnsupportedEntry;
 import synapse.converter.ScopeContext;
 import synapse.converter.TypeConverter;
 import synapse.converter.bir.BIRConverter;
@@ -55,10 +56,14 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
         convertProperty((Property) node, context);
     }
 
+    private static final String CATEGORY = "Unsupported property";
+
     private static void convertProperty(Property property, ScopeContext context) {
         switch (property.scope()) {
             case TRANSPORT_SCOPE -> {
-                rejectRemoveAction(property);
+                if (isUnsupportedRemove(property, context)) {
+                    return;
+                }
                 context.ensureContextAvailable();
                 if (property.hasExpression()) {
                     // A transport header is a string slot, so the expression is coerced to string.
@@ -71,7 +76,9 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
                 }
             }
             case AXIS2_SCOPE -> {
-                rejectRemoveAction(property);
+                if (isUnsupportedRemove(property, context)) {
+                    return;
+                }
                 context.ensureContextAvailable();
                 if (HTTP_STATUS_PROPERTY.equalsIgnoreCase(property.name())) {
                     // The status code is an int slot, so the value or expression is coerced to int.
@@ -89,16 +96,53 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
                 }
             }
             case DEFAULT_SCOPE, SYNAPSE_SCOPE -> convertDefaultProperty(property, context);
-            default -> throw new UnsupportedOperationException("The '" + property.scope()
-                    + "' scope is not supported for property '" + property.name() + "'.");
+            default -> reportUnsupported(property, context, "The '" + property.scope()
+                    + "' scope is not supported for a property; manual conversion required.");
         }
     }
 
-    private static void rejectRemoveAction(Property property) {
-        if (REMOVE_ACTION.equals(property.action())) {
-            throw new UnsupportedOperationException("The 'remove' action is not supported for property '"
-                    + property.name() + "' in the '" + property.scope() + "' scope.");
+    // Emits a to-do and records the case instead of converting; returns true (so the caller skips the
+    // property) when a 'remove' action is used in a scope that cannot express it (transport, axis2).
+    private static boolean isUnsupportedRemove(Property property, ScopeContext context) {
+        if (!REMOVE_ACTION.equals(property.action())) {
+            return false;
         }
+        reportUnsupported(property, context, "The 'remove' action is not supported in the '"
+                + property.scope() + "' scope; manual conversion required.");
+        return true;
+    }
+
+    private static void reportUnsupported(Property property, ScopeContext context, String detail) {
+        String file = context.shared().currentFile();
+        String origin = file.isEmpty() ? "" : " (from " + file + ")";
+        String snippet = propertySnippet(property);
+        context.statements().add(new Statement.Comment(
+                "TODO: Unsupported Synapse property '" + property.name() + "'" + origin + ". " + detail
+                        + "\nOriginal Synapse:\n" + snippet));
+        context.shared().reportUnsupported(new UnsupportedEntry(CATEGORY, "property", file, detail, snippet));
+    }
+
+    // Reconstructs the property's Synapse source for the to-do/report. The reader keeps a property's parsed
+    // fields rather than its raw XML, so this rebuilds the salient attributes (name, scope, type) and its
+    // content: a value or expression, a 'remove' action, or an inline OM (XML) child element. The inline
+    // XML is emitted as element content (not a self-closed tag) so a scoped property's XML value is not
+    // lost in the report.
+    private static String propertySnippet(Property property) {
+        StringBuilder builder = new StringBuilder("<property name=\"").append(property.name()).append("\"");
+        builder.append(" scope=\"").append(property.scope()).append("\"");
+        builder.append(" type=\"").append(property.type()).append("\"");
+        if (property.hasExpression()) {
+            builder.append(" expression=\"").append(property.expression()).append("\"");
+        } else if (property.value() != null && !property.value().isEmpty()) {
+            builder.append(" value=\"").append(property.value()).append("\"");
+        }
+        if (REMOVE_ACTION.equals(property.action())) {
+            builder.append(" action=\"remove\"");
+        }
+        if (property.hasOmElement()) {
+            return builder.append(">\n").append(property.omElement()).append("\n</property>").toString();
+        }
+        return builder.append("/>").toString();
     }
 
     private static void convertDefaultProperty(Property property, ScopeContext context) {

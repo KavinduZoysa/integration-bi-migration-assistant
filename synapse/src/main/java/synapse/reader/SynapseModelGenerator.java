@@ -30,11 +30,14 @@ import synapse.model.Synapse.Respond;
 import synapse.model.Synapse.Sequence;
 import synapse.model.Synapse.SequenceMediator;
 import synapse.model.Synapse.SynapseNode;
+import synapse.model.Synapse.Unsupported;
+import synapse.model.Synapse.UnsupportedArtifact;
 import synapse.model.SynapseType;
 
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import javax.xml.XMLConstants;
 import javax.xml.transform.OutputKeys;
@@ -48,6 +51,7 @@ public class SynapseModelGenerator {
 
     private static final String API_TAG = "api";
     private static final String SEQUENCE_TAG = "sequence";
+    private static final String DEFINITIONS_TAG = "definitions";
     private static final String RESOURCE_TAG = "resource";
     private static final String IN_SEQUENCE_TAG = "inSequence";
     private static final String PAYLOAD_FACTORY_TAG = "payloadFactory";
@@ -58,30 +62,41 @@ public class SynapseModelGenerator {
     private static final String DEFAULT_PROPERTY_SCOPE = "default";
     private static final String DEFAULT_PROPERTY_ACTION = "set";
 
+    // Unsupported mediators whose children are themselves mediator sequences (control-flow wrappers),
+    // so nested recognised mediators can still be converted. Other unsupported mediators (e.g. <log>,
+    // whose <property> child is a parameter, not a context-property set) are treated as opaque leaves.
+    private static final Set<String> CONTAINER_MEDIATOR_TAGS =
+            Set.of("filter", "switch", "foreach", "iterate", "clone", "aggregate");
+
+    // Child elements of a container mediator that hold a mediator sequence to descend into. Note
+    // <sequence> is deliberately excluded: a keyed <sequence key="..."/> is a call mediator, while an
+    // anonymous <sequence> is a container — they are told apart by their 'key' attribute at read time.
+    private static final Set<String> MEDIATOR_SEQUENCE_TAGS =
+            Set.of("then", "else", "case", "default", "target", "onComplete", IN_SEQUENCE_TAG);
+
     public static List<SynapseNode> generateModel(Element rootElement) {
         List<SynapseNode> nodes = new ArrayList<>();
 
-        SynapseNode rootNode = readTopLevel(rootElement);
-        if (rootNode != null) {
-            nodes.add(rootNode);
+        // A <definitions> root wraps several artifacts; every other root is a single artifact (a
+        // supported <api>/<sequence>, or an unsupported one such as <proxy> captured for the report).
+        if (DEFINITIONS_TAG.equals(rootElement.getTagName())) {
+            for (Element child : childElements(rootElement)) {
+                nodes.add(readArtifact(child));
+            }
             return nodes;
         }
 
-        for (Element child : childElements(rootElement)) {
-            SynapseNode node = readTopLevel(child);
-            if (node != null) {
-                nodes.add(node);
-            }
-        }
-
+        nodes.add(readArtifact(rootElement));
         return nodes;
     }
 
-    private static SynapseNode readTopLevel(Element element) {
+    @NotNull
+    private static SynapseNode readArtifact(Element element) {
         return switch (element.getTagName()) {
             case API_TAG -> readApi(element);
             case SEQUENCE_TAG -> readSequence(element);
-            default -> null;
+            default -> new UnsupportedArtifact(element.getTagName(), element.getAttribute("name"),
+                    serializeElement(element));
         };
     }
 
@@ -104,9 +119,9 @@ public class SynapseModelGenerator {
 
         String uriTemplate = element.getAttribute("uri-template");
         String urlMapping = element.getAttribute("url-mapping");
-        if (uriTemplate.isEmpty() && urlMapping.isEmpty()) {
-            throw new IllegalArgumentException("Synapse resource must define either 'uri-template' or 'url-mapping'.");
-        }
+        // A resource with neither 'uri-template' nor 'url-mapping' matches any path in Synapse; it is
+        // converted to a Ballerina rest path parameter rather than being rejected.
+        boolean matchAnyPath = uriTemplate.isEmpty() && urlMapping.isEmpty();
         String template = !uriTemplate.isEmpty() ? uriTemplate : urlMapping;
 
         String path = "";
@@ -138,7 +153,7 @@ public class SynapseModelGenerator {
             }
         }
 
-        return new Resource(methods, path, queryParams, inSequence);
+        return new Resource(methods, path, matchAnyPath, queryParams, inSequence);
     }
 
     private static Sequence readSequence(Element element) {
@@ -158,23 +173,51 @@ public class SynapseModelGenerator {
     private static List<SynapseNode> readMediators(Element element) {
         List<SynapseNode> mediators = new ArrayList<>();
         for (Element child : childElements(element)) {
-            switch (child.getTagName()) {
-                case PAYLOAD_FACTORY_TAG -> mediators.add(readPayloadFactory(child));
-                case RESPOND_TAG -> mediators.add(new Respond());
-                case PROPERTY_TAG -> mediators.add(readProperty(child));
-                case SEQUENCE_TAG -> {
-                    String key = child.getAttribute("key");
-                    if (key.isBlank()) {
-                        throw new IllegalArgumentException("Synapse sequence mediator must define a non-empty 'key'.");
-                    }
-                    mediators.add(new SequenceMediator(key));
-                }
-                default -> {
-                    // Other mediators are not supported yet; skip for now.
-                }
-            }
+            mediators.add(readMediator(child));
         }
         return mediators;
+    }
+
+    @NotNull
+    private static SynapseNode readMediator(Element child) {
+        return switch (child.getTagName()) {
+            case PAYLOAD_FACTORY_TAG -> readPayloadFactory(child);
+            case RESPOND_TAG -> new Respond();
+            case PROPERTY_TAG -> readProperty(child);
+            case SEQUENCE_TAG -> {
+                String key = child.getAttribute("key");
+                if (key.isBlank()) {
+                    throw new IllegalArgumentException("Synapse sequence mediator must define a non-empty 'key'.");
+                }
+                yield new SequenceMediator(key);
+            }
+            // An unsupported mediator is captured verbatim as a to-do rather than dropped. For a
+            // control-flow wrapper, its nested mediator sequences are still read so supported children
+            // can be converted; all other mediators are opaque leaves.
+            default -> new Unsupported(child.getTagName(), serializeElement(child),
+                    CONTAINER_MEDIATOR_TAGS.contains(child.getTagName())
+                            ? collectNestedMediators(child) : List.of());
+        };
+    }
+
+    @NotNull
+    private static List<SynapseNode> collectNestedMediators(Element wrapper) {
+        List<SynapseNode> nested = new ArrayList<>();
+        for (Element child : childElements(wrapper)) {
+            if (isMediatorSequenceContainer(child)) {
+                nested.addAll(collectNestedMediators(child));
+            } else {
+                nested.add(readMediator(child));
+            }
+        }
+        return nested;
+    }
+
+    private static boolean isMediatorSequenceContainer(Element element) {
+        if (MEDIATOR_SEQUENCE_TAGS.contains(element.getTagName())) {
+            return true;
+        }
+        return SEQUENCE_TAG.equals(element.getTagName()) && element.getAttribute("key").isBlank();
     }
 
     @NotNull

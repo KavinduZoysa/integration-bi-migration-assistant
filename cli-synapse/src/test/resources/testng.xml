@@ -9,6 +9,7 @@
             <class name="synapse.model.TopologicalSorterTest"/>
             <class name="synapse.model.DependencyResolverTest"/>
             <class name="synapse.model.DependencyGraphTest"/>
+            <class name="synapse.reader.SynapseConfigReaderTest"/>
         </classes>
     </test>
 </suite>

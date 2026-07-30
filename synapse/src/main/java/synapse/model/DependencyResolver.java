@@ -25,6 +25,7 @@ import synapse.model.Synapse.Resource;
 import synapse.model.Synapse.Sequence;
 import synapse.model.Synapse.SequenceMediator;
 import synapse.model.Synapse.SynapseNode;
+import synapse.model.Synapse.Unsupported;
 import synapse.reader.SynapseConfigReader;
 
 import java.util.ArrayList;
@@ -106,6 +107,8 @@ public class DependencyResolver {
             case Sequence sequence ->
                     sequence.mediators().forEach(mediator -> collectSequenceKeys(mediator, sequenceKeys));
             case SequenceMediator sequenceMediator -> sequenceKeys.add(sequenceMediator.key());
+            case Unsupported unsupported ->
+                    unsupported.children().forEach(child -> collectSequenceKeys(child, sequenceKeys));
             default -> { }
         }
     }
