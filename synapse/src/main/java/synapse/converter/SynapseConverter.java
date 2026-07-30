@@ -236,6 +236,7 @@ public final class SynapseConverter {
         return Files.isDirectory(source) ? source : source.getParent();
     }
 
+    @NotNull
     private static String relativePath(Path sourceRoot, Path file) {
         if (file == null) {
             return "";

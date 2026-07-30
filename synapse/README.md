@@ -66,7 +66,7 @@ translation is surfaced as a TODO so the generated package still builds around t
 
 - **Unsupported mediators** (e.g. `<log>`, `<filter>`, `<switch>`, `<call>`) become a `// TODO` comment
   in the generated function body, carrying the original Synapse XML and its source file. For a
-  control-flow wrapper (`<filter>`, `<switch>`, `<foreach>`, `<iterate>`, `<clone>`), the supported
+  control-flow wrapper (`<filter>`, `<switch>`, `<foreach>`, `<iterate>`, `<aggregate>`, `<clone>`), the supported
   mediators nested in its branches are still converted best-effort (the wrapper's control flow is not
   applied — the TODO flags that it needs manual restructuring).
 - **Unsupported top-level artifacts** (e.g. `<proxy>`, `<endpoint>`) are reported in

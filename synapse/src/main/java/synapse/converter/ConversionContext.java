@@ -87,6 +87,7 @@ public class ConversionContext {
         this.currentFile = currentFile;
     }
 
+    @NotNull
     public String currentFile() {
         return currentFile;
     }
@@ -100,6 +101,7 @@ public class ConversionContext {
         unsupported.add(entry);
     }
 
+    @NotNull
     public List<UnsupportedEntry> unsupported() {
         return unsupported;
     }

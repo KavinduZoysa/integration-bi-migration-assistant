@@ -17,6 +17,7 @@
  */
 package synapse.converter.report;
 
+import org.jetbrains.annotations.NotNull;
 import synapse.converter.ConversionContext.UnsupportedEntry;
 
 import java.util.ArrayList;
@@ -34,6 +35,7 @@ public final class MigrationReport {
     private MigrationReport() {
     }
 
+    @NotNull
     public static String render(List<UnsupportedEntry> entries) {
         boolean single = entries.size() == 1;
         StringBuilder report = new StringBuilder();

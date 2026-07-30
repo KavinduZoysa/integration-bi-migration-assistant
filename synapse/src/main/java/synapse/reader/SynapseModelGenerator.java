@@ -90,6 +90,7 @@ public class SynapseModelGenerator {
         return nodes;
     }
 
+    @NotNull
     private static SynapseNode readArtifact(Element element) {
         return switch (element.getTagName()) {
             case API_TAG -> readApi(element);
@@ -177,6 +178,7 @@ public class SynapseModelGenerator {
         return mediators;
     }
 
+    @NotNull
     private static SynapseNode readMediator(Element child) {
         return switch (child.getTagName()) {
             case PAYLOAD_FACTORY_TAG -> readPayloadFactory(child);
@@ -198,11 +200,7 @@ public class SynapseModelGenerator {
         };
     }
 
-    // Descends the mediator-sequence child elements of a control-flow wrapper (e.g. a <filter>'s
-    // <then>/<else>, an <iterate>'s <target><sequence>) and reads the mediators found there, so nested
-    // supported mediators are still converted while the wrapper itself becomes a to-do. A container child
-    // (a mediator-sequence tag, or an anonymous keyless <sequence>) is recursed into; anything else is a
-    // mediator read directly.
+    @NotNull
     private static List<SynapseNode> collectNestedMediators(Element wrapper) {
         List<SynapseNode> nested = new ArrayList<>();
         for (Element child : childElements(wrapper)) {

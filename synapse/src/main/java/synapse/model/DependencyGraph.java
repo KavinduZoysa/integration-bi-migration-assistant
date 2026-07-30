@@ -17,6 +17,7 @@
  */
 package synapse.model;
 
+import org.jetbrains.annotations.NotNull;
 import synapse.model.Synapse.Api;
 import synapse.model.Synapse.Kind;
 import synapse.model.Synapse.Sequence;
@@ -109,6 +110,7 @@ public class DependencyGraph {
         return unresolvedNodes;
     }
 
+    @NotNull
     public List<UnsupportedArtifactEntry> unsupportedArtifacts() {
         return unsupportedArtifacts;
     }

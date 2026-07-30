@@ -123,10 +123,14 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
     }
 
     // Reconstructs the property's Synapse source for the to-do/report. The reader keeps a property's parsed
-    // fields rather than its raw XML, so this rebuilds the salient attributes.
+    // fields rather than its raw XML, so this rebuilds the salient attributes (name, scope, type) and its
+    // content: a value or expression, a 'remove' action, or an inline OM (XML) child element. The inline
+    // XML is emitted as element content (not a self-closed tag) so a scoped property's XML value is not
+    // lost in the report.
     private static String propertySnippet(Property property) {
         StringBuilder builder = new StringBuilder("<property name=\"").append(property.name()).append("\"");
         builder.append(" scope=\"").append(property.scope()).append("\"");
+        builder.append(" type=\"").append(property.type()).append("\"");
         if (property.hasExpression()) {
             builder.append(" expression=\"").append(property.expression()).append("\"");
         } else if (property.value() != null && !property.value().isEmpty()) {
@@ -134,6 +138,9 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
         }
         if (REMOVE_ACTION.equals(property.action())) {
             builder.append(" action=\"remove\"");
+        }
+        if (property.hasOmElement()) {
+            return builder.append(">\n").append(property.omElement()).append("\n</property>").toString();
         }
         return builder.append("/>").toString();
     }

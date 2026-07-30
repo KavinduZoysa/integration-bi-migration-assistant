@@ -65,6 +65,26 @@ public class PropertyScopeTest {
                 {"transport-remove"},
                 {"axis2-remove"},
                 {"unknown-scope"},
+                {"om-inline-scope"},
         };
+    }
+
+    @Test
+    public void inlineXmlAndTypeArePreservedInReport() throws IOException {
+        Path output = Files.createTempDirectory("synapse-unsupported-property-om-test");
+        try {
+            SynapseConverter.migrateSynapse(UNSUPPORTED.resolve("om-inline-scope").toString(), output.toString(),
+                    false, false, false, false, Optional.of("testOrg"), Optional.of("pkg"));
+
+            String reportContent = Files.readString(output.resolve("migration_report.md"));
+            assertTrue(reportContent.contains("type=\"OM\""),
+                    "the reconstructed snippet should preserve the declared property type");
+            assertTrue(reportContent.contains("<greeting") && reportContent.contains("hello</greeting>"),
+                    "the reconstructed snippet should preserve the inline OM element content");
+            assertTrue(reportContent.contains("</property>"),
+                    "a property with inline XML must be emitted with element content, not self-closed");
+        } finally {
+            TestUtils.deleteDirectory(output);
+        }
     }
 }

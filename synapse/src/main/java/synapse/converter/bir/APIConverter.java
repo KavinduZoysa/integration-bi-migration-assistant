@@ -42,15 +42,17 @@ public class APIConverter implements BIRConverter<ConversionContext> {
     private static final String DEFAULT_LISTENER_REF = "httpListener";
     private static final String ROOT_RESOURCE_PATH = ".";
     // Ballerina rest path parameter for a resource that matches any path, and the "any HTTP method"
-    // accessor used when the Synapse resource does not restrict its methods.
+    // accessor used when the Synapse resource does not restrict its methods. 'default' is a keyword, so
+    // as a resource method name it is escaped with a leading quote.
     private static final String ANY_PATH = "[string... path]";
-    private static final String ANY_METHOD = "default";
+    private static final String ANY_METHOD = "'default";
     private static final String CALLER_PARAM = "caller";
     private static final String REQUEST_PARAM = "request";
 
     // Accessors whose HTTP method may carry a request body, so the generated resource takes an
-    // http:Request parameter. GET, HEAD and OPTIONS are excluded.
-    private static final Set<String> REQUEST_BODY_METHODS = Set.of("post", "put", "patch", "delete", "default");
+    // http:Request parameter. GET, HEAD and OPTIONS are excluded. 'default (any method) is included and
+    // matches the escaped keyword form emitted by ANY_METHOD.
+    private static final Set<String> REQUEST_BODY_METHODS = Set.of("post", "put", "patch", "delete", "'default");
 
     @Override
     public void convert(SynapseNode node, ConversionContext context) {
