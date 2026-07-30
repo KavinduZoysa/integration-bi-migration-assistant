@@ -82,8 +82,13 @@ public class SynapseConfigReader {
         }
     }
 
+    // The CAR/Micro Integrator project descriptor. It lists the deployable artifacts but is not itself a
+    // Synapse artifact, so it is skipped rather than parsed (and reported as unsupported).
+    private static final String ARTIFACT_DESCRIPTOR_FILE = "artifact.xml";
+
     /**
-     * Recursively collect every {@code .xml} file under {@code folder} into {@code xmlFiles}.
+     * Recursively collect every {@code .xml} file under {@code folder} into {@code xmlFiles}, skipping the
+     * {@code artifact.xml} project descriptor.
      */
     static void collectXmlFiles(File folder, List<File> xmlFiles) {
         File[] files = folder.listFiles();
@@ -93,10 +98,15 @@ public class SynapseConfigReader {
         for (File file : files) {
             if (file.isDirectory()) {
                 collectXmlFiles(file, xmlFiles);
-            } else if (file.getName().toLowerCase().endsWith(".xml")) {
+            } else if (isSynapseArtifactFile(file.getName())) {
                 xmlFiles.add(file);
             }
         }
+    }
+
+    private static boolean isSynapseArtifactFile(String fileName) {
+        String lowerCaseName = fileName.toLowerCase(Locale.ROOT);
+        return lowerCaseName.endsWith(".xml") && !lowerCaseName.equals(ARTIFACT_DESCRIPTOR_FILE);
     }
 
     public static Element readXMLConfigurationFile(File xmlFile) throws ParserConfigurationException,

@@ -20,6 +20,7 @@ package synapse.converter.bir.mediators;
 import common.BallerinaModel.Expression;
 import common.BallerinaModel.Statement;
 import synapse.converter.ConversionContext;
+import synapse.converter.ConversionContext.UnsupportedEntry;
 import synapse.converter.ScopeContext;
 import synapse.converter.bir.BIRConverter;
 import synapse.model.Synapse.SequenceMediator;
@@ -45,8 +46,8 @@ public class SequenceMediatorConverter implements BIRConverter<ScopeContext> {
         ConversionContext.SequenceMetadata metadata = context.shared().sequenceMetadata(sequenceMediator.key())
                 .orElse(null);
         if (metadata == null) {
-            throw new UnsupportedOperationException("No metadata found for referenced sequence '"
-                    + sequenceMediator.key() + "'.");
+            reportUnresolvedSequence(sequenceMediator.key(), context);
+            return;
         }
         List<Expression> args = new ArrayList<>();
         if (metadata.usesContext()) {
@@ -58,5 +59,18 @@ public class SequenceMediatorConverter implements BIRConverter<ScopeContext> {
         if (metadata.containsRespond()) {
             context.markResponded();
         }
+    }
+
+    private static void reportUnresolvedSequence(String key, ScopeContext context) {
+        String file = context.shared().currentFile();
+        String origin = file.isEmpty() ? "" : " (from " + file + ")";
+        String snippet = "<sequence key=\"" + key + "\"/>";
+        String detail = "Referenced sequence '" + key
+                + "' was not found among the converted artifacts; manual conversion required.";
+        context.statements().add(new Statement.Comment(
+                "TODO: Unresolved Synapse sequence reference '" + key + "'" + origin + ". " + detail
+                        + "\nOriginal Synapse:\n" + snippet));
+        context.shared().reportUnsupported(
+                new UnsupportedEntry("Unresolved sequence", "sequence", file, detail, snippet));
     }
 }

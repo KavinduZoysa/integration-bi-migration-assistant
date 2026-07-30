@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api xmlns="http://ws.apache.org/ns/synapse" name="CatchAll" context="/gateway">
+    <!-- A resource with neither uri-template nor url-mapping (and no methods) matches any path and any
+         HTTP method: it becomes a Ballerina 'default' accessor with a rest path parameter. -->
+    <resource methods="POST">
+        <inSequence>
+            <payloadFactory media-type="json">
+                <format>{"matched":true}</format>
+            </payloadFactory>
+            <respond/>
+        </inSequence>
+    </resource>
+</api>

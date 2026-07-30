@@ -41,6 +41,10 @@ public class APIConverter implements BIRConverter<ConversionContext> {
 
     private static final String DEFAULT_LISTENER_REF = "httpListener";
     private static final String ROOT_RESOURCE_PATH = ".";
+    // Ballerina rest path parameter for a resource that matches any path, and the "any HTTP method"
+    // accessor used when the Synapse resource does not restrict its methods.
+    private static final String ANY_PATH = "[string... path]";
+    private static final String ANY_METHOD = "default";
     private static final String CALLER_PARAM = "caller";
     private static final String REQUEST_PARAM = "request";
 
@@ -62,7 +66,8 @@ public class APIConverter implements BIRConverter<ConversionContext> {
     }
 
     private static Resource convertResource(synapse.model.Synapse.Resource resource, ConversionContext context) {
-        String method = resource.methods().toLowerCase(Locale.ROOT);
+        // A resource with no 'methods' matches any HTTP method, mapped to the Ballerina 'default' accessor.
+        String method = resource.methods().isBlank() ? ANY_METHOD : resource.methods().toLowerCase(Locale.ROOT);
 
         List<Parameter> parameters = new ArrayList<>();
         for (String queryParam : resource.queryParams()) {
@@ -81,7 +86,8 @@ public class APIConverter implements BIRConverter<ConversionContext> {
             MediatorConverters.convertMediators(resource.inSequence().mediators(), resourceContext);
         }
         context.addImports(ConversionContext.MAIN_BAL_FILE, resourceContext.importStatements());
-        return new Resource(method, buildResourcePath(resource.path()), parameters,
+        String path = resource.matchAnyPath() ? ANY_PATH : buildResourcePath(resource.path());
+        return new Resource(method, path, parameters,
                 Optional.of(new TypeDesc.BallerinaType("error?")), resourceContext.statements());
     }
 

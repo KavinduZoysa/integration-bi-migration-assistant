@@ -59,6 +59,25 @@ The migration tool currently supports the following Synapse elements:
 | `<respond>` | response return |
 | `<property>` (static name only) | response header, status code, or local variable |
 
+## Unsupported constructs (TODOs)
+
+The migration never aborts on an unsupported construct. Instead, every construct with no Ballerina
+translation is surfaced as a TODO so the generated package still builds around the supported parts:
+
+- **Unsupported mediators** (e.g. `<log>`, `<filter>`, `<switch>`, `<call>`) become a `// TODO` comment
+  in the generated function body, carrying the original Synapse XML and its source file. For a
+  control-flow wrapper (`<filter>`, `<switch>`, `<foreach>`, `<iterate>`, `<clone>`), the supported
+  mediators nested in its branches are still converted best-effort (the wrapper's control flow is not
+  applied — the TODO flags that it needs manual restructuring).
+- **Unsupported top-level artifacts** (e.g. `<proxy>`, `<endpoint>`) are reported in
+  `migration_report.md` (they have no Ballerina construct to host an inline comment).
+- **Unsupported `<property>` scopes / `remove` actions** and **unresolved `<sequence key="…"/>`
+  references** become inline `// TODO` comments and are recorded in the report.
+
+Every unsupported case is also aggregated into a `migration_report.md` at the package root (source file
++ original Synapse code per entry). The report is written only when there is at least one unsupported
+case; under `--dry-run` it is printed instead of written.
+
 ## Example
 
 Input (`HelloWorldService/helloWorld.xml`):
@@ -100,8 +119,8 @@ a case, drop `synapse/<Name>/<Name>.xml` and the expected `ballerina/<Name>` pac
 
 ## Known limitations
 
-- Only a single Synapse artifact **file** is converted, not a full project directory.
-- `<proxy>` services, `<log>`, and `<faultSequence>` are not yet handled; an unsupported mediator causes the conversion to fail.
-- `<property>` uses the static `value` attribute only; the dynamic `expression` form is not yet supported.
+- `<proxy>` services, `<log>`, `<filter>` and other mediators/artifacts are not converted, but they no
+  longer fail the migration: they are surfaced as TODOs (see [Unsupported constructs](#unsupported-constructs-todos)).
+- `<faultSequence>` / `<outSequence>` (error and out flows) are not yet migrated.
 - The response payload is set with a generic setter rather than media-type-specific ones (e.g. JSON/text/XML setters).
 - The HTTP listener is fixed (port `8080`) and is not derived from the source artifact.

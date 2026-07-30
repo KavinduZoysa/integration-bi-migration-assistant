@@ -28,10 +28,13 @@ public record Synapse() {
         }
     }
 
-    public record Resource(Kind kind, String methods, String path,
+    // matchAnyPath is set when the Synapse resource declares neither 'uri-template' nor 'url-mapping';
+    // such a resource matches any path, converted to a Ballerina rest path parameter ([string... path]).
+    public record Resource(Kind kind, String methods, String path, boolean matchAnyPath,
                            List<String> queryParams, InSequence inSequence) implements SynapseNode {
-        public Resource(String methods, String path, List<String> queryParams, InSequence inSequence) {
-            this(Kind.RESOURCE, methods, path, queryParams, inSequence);
+        public Resource(String methods, String path, boolean matchAnyPath, List<String> queryParams,
+                        InSequence inSequence) {
+            this(Kind.RESOURCE, methods, path, matchAnyPath, queryParams, inSequence);
         }
     }
 
@@ -95,6 +98,25 @@ public record Synapse() {
         }
     }
 
+    // An unsupported mediator captured verbatim so it can be surfaced as a to-do rather than silently
+    // dropped. rawXml is the serialized Synapse element; children holds any nested mediators recognised
+    // inside a control-flow wrapper (e.g. a <filter>'s <then>/<else>) so they can still be converted.
+    public record Unsupported(Kind kind, String tag, String rawXml, List<SynapseNode> children)
+            implements SynapseNode {
+        public Unsupported(String tag, String rawXml, List<SynapseNode> children) {
+            this(Kind.UNSUPPORTED_MEDIATOR, tag, rawXml, children);
+        }
+    }
+
+    // An unsupported top-level artifact (e.g. <proxy>, <endpoint>) captured verbatim so it can be
+    // surfaced in the migration report rather than silently dropped.
+    public record UnsupportedArtifact(Kind kind, String tag, String name, String rawXml)
+            implements SynapseNode {
+        public UnsupportedArtifact(String tag, String name, String rawXml) {
+            this(Kind.UNSUPPORTED_ARTIFACT, tag, name, rawXml);
+        }
+    }
+
     public interface SynapseNode {
         Kind kind();
     }
@@ -107,6 +129,8 @@ public record Synapse() {
         PAYLOAD_FACTORY,
         RESPOND,
         PROPERTY,
-        SEQUENCE_MEDIATOR
+        SEQUENCE_MEDIATOR,
+        UNSUPPORTED_MEDIATOR,
+        UNSUPPORTED_ARTIFACT
     }
 }
