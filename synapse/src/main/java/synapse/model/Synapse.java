@@ -29,10 +29,13 @@ public record Synapse() {
         }
     }
 
-    public record Resource(Kind kind, String methods, String path,
+    // matchAnyPath is set when the Synapse resource declares neither 'uri-template' nor 'url-mapping';
+    // such a resource matches any path, converted to a Ballerina rest path parameter ([string... path]).
+    public record Resource(Kind kind, String methods, String path, boolean matchAnyPath,
                            List<String> queryParams, InSequence inSequence) implements SynapseNode {
-        public Resource(String methods, String path, List<String> queryParams, InSequence inSequence) {
-            this(Kind.RESOURCE, methods, path, queryParams, inSequence);
+        public Resource(String methods, String path, boolean matchAnyPath, List<String> queryParams,
+                        InSequence inSequence) {
+            this(Kind.RESOURCE, methods, path, matchAnyPath, queryParams, inSequence);
         }
     }
 
@@ -73,26 +76,54 @@ public record Synapse() {
             this(Kind.SEQUENCE_MEDIATOR, key);
         }
     }
-
-    // <property name="..." scope="default|transport|axis2|axis2-client" type="string" value="..."
-    //           action="set|remove"/>
-    // -> action "set" (the default) sets a named property (of the given type and scope) to the given
-    //    value; action "remove" clears it.
-    public record Property(Kind kind, String name, String type, String scope,
-                           String value, Optional<String> expression, String action)
-            implements SynapseNode {
-        public Property(String name, String type, String scope,
-                        String value, Optional<String> expression, String action) {
-            this(Kind.PROPERTY, name, type, scope, value, expression, action);
-        }
-    }
-
+  
     // <class name="org.example.MyMediator">
     //   <property name="key" value="val"/>
     // </class>
     public record ClassMediator(Kind kind, String className, List<Property> properties) implements SynapseNode {
         public ClassMediator(String className, List<Property> properties) {
             this(Kind.CLASS_MEDIATOR, className, properties);
+        }
+    }
+
+    // <property name="..." scope="default|transport|axis2|axis2-client" type="string" value="..."
+    //           expression="..." action="set|remove"> <om-element/>? </property>
+    // -> action "set" (the default) sets a named property (of the given type and scope) to the given
+    //    value or expression (mutually exclusive; expression holds a Synapse XPath), or to the inline XML
+    //    child element carried in omElement; action "remove" clears it. A present omElement makes the
+    //    property an XML (OM) value regardless of the declared type.
+    public record Property(Kind kind, String name, SynapseType type, String scope, String value,
+                           String expression, String omElement, String action) implements SynapseNode {
+        public Property(String name, SynapseType type, String scope, String value, String expression,
+                        String omElement, String action) {
+            this(Kind.PROPERTY, name, type, scope, value, expression, omElement, action);
+        }
+
+        public boolean hasExpression() {
+            return expression != null && !expression.isEmpty();
+        }
+
+        public boolean hasOmElement() {
+            return omElement != null && !omElement.isEmpty();
+        }
+    }
+
+    // An unsupported mediator captured verbatim so it can be surfaced as a to-do rather than silently
+    // dropped. rawXml is the serialized Synapse element; children holds any nested mediators recognised
+    // inside a control-flow wrapper (e.g. a <filter>'s <then>/<else>) so they can still be converted.
+    public record Unsupported(Kind kind, String tag, String rawXml, List<SynapseNode> children)
+            implements SynapseNode {
+        public Unsupported(String tag, String rawXml, List<SynapseNode> children) {
+            this(Kind.UNSUPPORTED_MEDIATOR, tag, rawXml, children);
+        }
+    }
+
+    // An unsupported top-level artifact (e.g. <proxy>, <endpoint>) captured verbatim so it can be
+    // surfaced in the migration report rather than silently dropped.
+    public record UnsupportedArtifact(Kind kind, String tag, String name, String rawXml)
+            implements SynapseNode {
+        public UnsupportedArtifact(String tag, String name, String rawXml) {
+            this(Kind.UNSUPPORTED_ARTIFACT, tag, name, rawXml);
         }
     }
 
@@ -109,6 +140,8 @@ public record Synapse() {
         RESPOND,
         PROPERTY,
         SEQUENCE_MEDIATOR,
-        CLASS_MEDIATOR
+        CLASS_MEDIATOR,
+        UNSUPPORTED_MEDIATOR,
+        UNSUPPORTED_ARTIFACT
     }
 }

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api xmlns="http://ws.apache.org/ns/synapse" name="FilterNested" context="/orders">
+    <resource methods="POST" uri-template="/create">
+        <inSequence>
+            <!-- <filter> is unsupported: it becomes a TODO carrying its original XML, but the supported
+                 mediators nested in its <then>/<else> branches are still converted best-effort. -->
+            <filter source="$ctx:type" regex="premium">
+                <then>
+                    <property name="tier" scope="default" value="premium"/>
+                </then>
+                <else>
+                    <property name="tier" scope="default" value="standard"/>
+                </else>
+            </filter>
+            <payloadFactory media-type="json">
+                <format>{"ok":true}</format>
+            </payloadFactory>
+            <respond/>
+        </inSequence>
+    </resource>
+</api>

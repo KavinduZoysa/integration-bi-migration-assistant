@@ -66,9 +66,12 @@ public class ConversionContext {
     private final Map<String, SequenceMetadata> sequenceMetadata = new HashMap<>();
     private final Map<String, Set<Import>> importsByFile = new HashMap<>();
     private final Map<String, PropertyInfo> properties = new LinkedHashMap<>();
+    private final Map<String, Function> converterFunctions = new LinkedHashMap<>();
+    private final List<UnsupportedEntry> unsupported = new ArrayList<>();
 
     private DependencyGraph dependencyGraph;
     private JavaSourceResolver javaSourceResolver = new JavaSourceResolver(List.of());
+    private String currentFile = "";
 
     public void setDependencyGraph(DependencyGraph dependencyGraph) {
         this.dependencyGraph = dependencyGraph;
@@ -87,6 +90,31 @@ public class ConversionContext {
     public void setJavaSourceResolver(JavaSourceResolver javaSourceResolver) {
         assert javaSourceResolver != null : "javaSourceResolver must not be null";
         this.javaSourceResolver = javaSourceResolver;
+    /**
+     * The source artifact file currently being converted, relative to the migration source root. Set by
+     * {@code SynapseConverter} before each artifact so converters can attribute a to-do to its origin.
+     */
+    public void setCurrentFile(String currentFile) {
+        this.currentFile = currentFile;
+    }
+
+    @NotNull
+    public String currentFile() {
+        return currentFile;
+    }
+
+    /**
+     * Records an unsupported Synapse construct so it can be surfaced in the migration report. Populated
+     * as artifacts are converted and preserved across {@link #clearArtifactOutput()}, since the report
+     * is written once at the end of the whole run.
+     */
+    public void reportUnsupported(UnsupportedEntry entry) {
+        unsupported.add(entry);
+    }
+
+    @NotNull
+    public List<UnsupportedEntry> unsupported() {
+        return unsupported;
     }
 
     public void addService(Service service) {
@@ -103,6 +131,21 @@ public class ConversionContext {
 
     public List<Function> functions() {
         return functions;
+    }
+
+    /**
+     * Registers a type-conversion helper function (e.g. {@code convertToInt}, {@code stringToInt}) that a
+     * property conversion needs, keyed by its name so the same converter requested by many properties is
+     * emitted once. Populated while artifacts are converted and preserved across
+     * {@link #clearArtifactOutput()}, since the converters are flushed into {@code functions.bal} in a
+     * single final pass alongside {@code respond} / {@code emitPayload}.
+     */
+    public void addConverterFunction(Function function) {
+        converterFunctions.putIfAbsent(function.functionName(), function);
+    }
+
+    public Collection<Function> converterFunctions() {
+        return converterFunctions.values();
     }
 
     public void addRecord(ModuleTypeDef record) {
@@ -184,5 +227,12 @@ public class ConversionContext {
     // future non-default scopes even though only default-scope properties currently become Context
     // fields.
     public record PropertyInfo(Set<String> types, String scope) {
+    }
+
+    // A single unsupported Synapse construct surfaced in the migration report. category groups the case
+    // (e.g. "Unsupported mediator", "Unsupported artifact", "Unsupported property"), tag is the Synapse
+    // element name, file is the source artifact (relative to the source root), detail is a human-readable
+    // reason, and rawXml is the original Synapse code.
+    public record UnsupportedEntry(String category, String tag, String file, String detail, String rawXml) {
     }
 }

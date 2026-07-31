@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api context="/x" name="OmScope" xmlns="http://ws.apache.org/ns/synapse">
+    <resource methods="GET" uri-template="/r">
+        <inSequence>
+            <!-- Unsupported scope carrying an inline OM (XML) value: the report must preserve both the
+                 declared type and the inline element content. -->
+            <property name="omProp" scope="operation" type="OM">
+                <greeting>hello</greeting>
+            </property>
+            <respond/>
+        </inSequence>
+        <faultSequence/>
+    </resource>
+</api>

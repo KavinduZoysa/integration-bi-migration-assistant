@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="expr" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+    <property name="message" scope="default" type="STRING" value="Hello World"/>
+    <property name="messageCopy" scope="default" type="STRING" expression="$ctx:message"/>
+    <property name="untypedMessage" scope="default" value="Hello Untyped"/>
+    <property name="untypedMessageCopy" scope="default" expression="$ctx:untypedMessage"/>
+    <property name="integerValue" scope="default" type="INTEGER" value="23"/>
+    <property name="integerValueCopy" scope="default" type="INTEGER" expression="$ctx:integerValue"/>
+    <property name="integerExpression" scope="default" type="INTEGER" expression="23"/>
+    <property name="integerExpressionCopy" scope="default" type="INTEGER"
+              expression="$ctx:integerExpression"/>
+    <property name="numericString" scope="default" type="STRING" value="23"/>
+    <property name="numericStringCopy" scope="default" type="STRING" expression="$ctx:numericString"/>
+    <!-- Widening: an int literal assigns to long/float/double with no explicit conversion. -->
+    <property name="longFromInt" scope="default" type="LONG" value="23"/>
+    <property name="floatFromInt" scope="default" type="FLOAT" value="23"/>
+    <property name="doubleFromInt" scope="default" type="DOUBLE" value="23"/>
+    <property name="floatFromIntExpression" scope="default" type="FLOAT" expression="23"/>
+    <!-- Same-type float: no conversion. -->
+    <property name="floatValue" scope="default" type="FLOAT" value="2.5"/>
+    <!-- Not equivalent, target is not string: the value is emitted as-is (fall-through). -->
+    <property name="doubleFromFloat" scope="default" type="DOUBLE" value="2.5"/>
+    <!-- Not equivalent, target is string: an explicit .toString() is appended. -->
+    <property name="stringFromFloat" scope="default" type="STRING" value="2.5"/>
+    <property name="stringFromBoolean" scope="default" type="STRING" value="true"/>
+    <property name="stringFromFloatExpression" scope="default" type="STRING" expression="2.5"/>
+</sequence>

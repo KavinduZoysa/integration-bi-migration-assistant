@@ -17,14 +17,49 @@
  */
 package synapse.converter.bir.mediators;
 
+import common.BallerinaModel.Statement;
+import synapse.converter.ConversionContext.UnsupportedEntry;
 import synapse.converter.ScopeContext;
 import synapse.converter.bir.BIRConverter;
+import synapse.converter.bir.MediatorConverters;
 import synapse.model.Synapse.SynapseNode;
+import synapse.model.Synapse.Unsupported;
 
+/**
+ * Converts a mediator that has no Ballerina translation. Rather than failing the migration, it emits a
+ * {@code // TO}{@code DO} comment carrying the mediator's original Synapse XML and source file, and
+ * records the case for the migration report. For a control-flow wrapper (e.g. {@code <filter>}) whose
+ * nested mediator sequences were read into {@link Unsupported#children()}, those children are still
+ * converted best-effort after the marker — the wrapper's control flow is not applied, so the marker
+ * flags that the result needs manual restructuring.
+ */
 public class UnsupportedConverter implements BIRConverter<ScopeContext> {
+
+    private static final String CATEGORY = "Unsupported mediator";
 
     @Override
     public void convert(SynapseNode node, ScopeContext context) {
-        throw new UnsupportedOperationException("No converter implemented for Synapse node kind: " + node.kind());
+        if (!(node instanceof Unsupported unsupported)) {
+            context.statements().add(new Statement.Comment(
+                    "TODO: Unsupported Synapse mediator kind '" + node.kind() + "'. Manual conversion required."));
+            return;
+        }
+
+        String file = context.shared().currentFile();
+        String detail = unsupported.children().isEmpty()
+                ? "Mediator not supported; manual conversion required."
+                : "Control-flow mediator not supported; the wrapper logic is not applied and nested "
+                        + "mediators below need manual restructuring.";
+        context.statements().add(new Statement.Comment(todo(unsupported, file, detail)));
+        context.shared().reportUnsupported(
+                new UnsupportedEntry(CATEGORY, unsupported.tag(), file, detail, unsupported.rawXml()));
+
+        MediatorConverters.convertMediators(unsupported.children(), context);
+    }
+
+    private static String todo(Unsupported unsupported, String file, String detail) {
+        String origin = file.isEmpty() ? "" : " (from " + file + ")";
+        return "TODO: Unsupported Synapse mediator '<" + unsupported.tag() + ">'" + origin + ". " + detail
+                + "\nOriginal Synapse:\n" + unsupported.rawXml();
     }
 }

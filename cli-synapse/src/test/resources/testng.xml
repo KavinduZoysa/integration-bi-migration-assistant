@@ -5,9 +5,11 @@
             <class name="synapse.converter.SynapseProjectConversionTest"/>
             <class name="synapse.converter.SynapseImportsTest"/>
             <class name="synapse.converter.PropertyScopeTest"/>
+            <class name="synapse.expression.SynapseExpressionTest"/>
             <class name="synapse.model.TopologicalSorterTest"/>
             <class name="synapse.model.DependencyResolverTest"/>
             <class name="synapse.model.DependencyGraphTest"/>
+            <class name="synapse.reader.SynapseConfigReaderTest"/>
         </classes>
     </test>
 </suite>

@@ -43,7 +43,8 @@ public final class MediatorConverters {
             Kind.PROPERTY, new PropertyConverter(),
             Kind.SEQUENCE_MEDIATOR, new SequenceMediatorConverter(),
             Kind.CLASS_MEDIATOR, new ClassMediatorConverter(),
-            Kind.RESPOND, new RespondConverter());
+            Kind.RESPOND, new RespondConverter(),
+            Kind.UNSUPPORTED_MEDIATOR, new UnsupportedConverter());
 
     private MediatorConverters() {
     }
@@ -56,7 +57,7 @@ public final class MediatorConverters {
      * {@code error?}, and a respond sends its response through {@code ctx.caller} via the generated
      * {@code respond} utility rather than by returning an {@code http:Response}.
      */
-    static void convertMediators(List<SynapseNode> mediators, ScopeContext context) {
+    public static void convertMediators(List<SynapseNode> mediators, ScopeContext context) {
         for (SynapseNode mediator : mediators) {
             BIRConverter<ScopeContext> converter = MEDIATOR_CONVERTERS.getOrDefault(mediator.kind(),
                     new UnsupportedConverter());
