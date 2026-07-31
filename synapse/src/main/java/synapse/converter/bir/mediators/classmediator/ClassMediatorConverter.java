@@ -82,7 +82,7 @@ public class ClassMediatorConverter implements BIRConverter<ScopeContext> {
         List<Parameter> params = new ArrayList<>();
         params.add(new Parameter("ctx", new TypeDesc.BallerinaType("Context")));
         for (Property property : mediator.properties()) {
-            if (property.expression().isPresent()) {
+            if (property.expression() != null && !property.expression().isBlank()) {
                 // Dynamic (XPath/JSONPath) values are resolved at runtime, so they cannot become
                 // a static string parameter.
                 continue;
@@ -97,7 +97,7 @@ public class ClassMediatorConverter implements BIRConverter<ScopeContext> {
         List<Expression> args = new ArrayList<>();
         args.add(new Expression.VariableReference("ctx"));
         for (Property property : mediator.properties()) {
-            if (property.expression().isPresent()) {
+            if (property.expression() != null && !property.expression().isBlank()) {
                 continue;
             }
             args.add(new StringConstant(property.value()));
