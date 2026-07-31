@@ -18,7 +18,6 @@
 package synapse.model;
 
 import java.util.List;
-import java.util.Optional;
 
 public record Synapse() {
 
