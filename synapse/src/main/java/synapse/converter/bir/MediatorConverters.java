@@ -18,12 +18,12 @@
 package synapse.converter.bir;
 
 import synapse.converter.ScopeContext;
-import synapse.converter.bir.mediators.classmediator.ClassMediatorConverter;
 import synapse.converter.bir.mediators.PayloadFactoryConverter;
 import synapse.converter.bir.mediators.PropertyConverter;
 import synapse.converter.bir.mediators.RespondConverter;
 import synapse.converter.bir.mediators.SequenceMediatorConverter;
 import synapse.converter.bir.mediators.UnsupportedConverter;
+import synapse.converter.bir.mediators.classmediator.ClassMediatorConverter;
 import synapse.model.Synapse.Kind;
 import synapse.model.Synapse.SynapseNode;
 
