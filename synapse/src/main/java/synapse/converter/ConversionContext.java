@@ -90,6 +90,8 @@ public class ConversionContext {
     public void setJavaSourceResolver(JavaSourceResolver javaSourceResolver) {
         assert javaSourceResolver != null : "javaSourceResolver must not be null";
         this.javaSourceResolver = javaSourceResolver;
+    }
+    
     /**
      * The source artifact file currently being converted, relative to the migration source root. Set by
      * {@code SynapseConverter} before each artifact so converters can attribute a to-do to its origin.
