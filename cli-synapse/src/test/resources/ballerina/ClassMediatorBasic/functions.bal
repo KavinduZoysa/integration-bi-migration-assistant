@@ -1,6 +1,10 @@
 import ballerina/http;
 
-function greetMediator(Context ctx, string lang) { // TODO: implement from the original mediator logic (source located: SOURCE_FILE). }
+function greetMediator(Context ctx, string lang, string target) { // TODO: implement from the original mediator logic (source located: SOURCE_FILE). }
+
+function convertToString(anydata v) returns string {
+    return v.toString();
+}
 
 function respond(Context ctx) returns error? {
     http:Response response = new;

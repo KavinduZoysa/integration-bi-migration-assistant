@@ -6,7 +6,8 @@ service /hello on httpListener {
     resource function get greet(http:Caller caller) returns error? {
         Context ctx = {variables: {}, caller: caller};
         ctx.payload = {"msg": "hello"};
-        greetMediator(ctx, "en");
+        ctx.variables.who = "world";
+        greetMediator(ctx, "en", convertToString(ctx.variables.who));
         check respond(ctx);
     }
 }

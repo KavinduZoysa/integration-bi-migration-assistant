@@ -18,6 +18,7 @@
 package synapse.converter.bir.mediators.classmediator;
 
 import common.BallerinaModel.Expression;
+import common.BallerinaModel.Expression.BallerinaExpression;
 import common.BallerinaModel.Expression.StringConstant;
 import common.BallerinaModel.Function;
 import common.BallerinaModel.Parameter;
@@ -26,21 +27,32 @@ import common.BallerinaModel.TypeDesc;
 import common.BallerinaModel.TypeDesc.BuiltinType;
 import synapse.converter.ScopeContext;
 import synapse.converter.bir.BIRConverter;
+import synapse.converter.bir.mediators.PropertyConverter;
 import synapse.converter.bir.mediators.classmediator.source.JavaSource;
+import synapse.expression.SynapseExpression;
+import synapse.expression.SynapseExpressionParser;
 import synapse.model.Synapse.ClassMediator;
 import synapse.model.Synapse.Property;
 import synapse.model.Synapse.SynapseNode;
+import synapse.model.SynapseType;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * Converts a Synapse {@code <class>} mediator into a call to a generated Ballerina stub function.
  *
  * <p>Because the mediator's Java logic cannot be automatically translated, a stub function is
- * emitted into {@code functions.bal}. The stub takes the {@code Context ctx} followed by each static
- * {@code <property>} value as a {@code string} argument; dynamic {@code expression} properties are
- * omitted, since they cannot be evaluated statically.
+ * emitted into {@code functions.bal}. The stub takes the {@code Context ctx} followed by each
+ * {@code <property>} as a {@code string} argument: a static {@code value} becomes a string literal, and
+ * a dynamic {@code expression} is realized the same way {@link PropertyConverter} would and coerced to
+ * {@code string}. An expression the property converter does not recognize (e.g. the old-style
+ * {@code get-property(...)} function-call syntax) has no supported translation, so that property is
+ * dropped and flagged with a TODO instead of being passed through as the literal expression text.
  *
  * <p>When the mediator's original Java source can be located (see {@code JavaSourceResolver}) it is
  * embedded in the stub body as a reference comment, tagged with its {@link JavaSource.Origin}, so the
@@ -54,15 +66,20 @@ public class ClassMediatorConverter implements BIRConverter<ScopeContext> {
         ClassMediator classMediator = (ClassMediator) node;
         String functionName = stubFunctionName(classMediator.className());
 
-        // Register the stub only once: the same mediator (or two classes sharing a simple name)
-        // can appear at several sites, but functions.bal must declare each function name once.
-        if (!isStubRegistered(context, functionName)) {
-            context.shared().addFunction(new Function(
-                    functionName, buildStubParams(classMediator), buildStubBody(context, classMediator.className())));
+        context.ensureContextAvailable();
+        Map<String, Expression> resolvedByName = new LinkedHashMap<>();
+        for (Property property : classMediator.properties()) {
+            resolveArgument(property, context).ifPresent(value -> resolvedByName.put(property.name(), value));
         }
 
-        context.statements().add(new Statement.CallStatement(
-                new Expression.FunctionCall(functionName, buildCallArgs(classMediator, context))));
+        List<String> parameterNames = registerStub(context, functionName, classMediator, resolvedByName.keySet());
+
+        List<Expression> args = new ArrayList<>();
+        args.add(new Expression.VariableReference("ctx"));
+        for (String name : parameterNames) {
+            args.add(resolvedByName.getOrDefault(name, new StringConstant("")));
+        }
+        context.statements().add(new Statement.CallStatement(new Expression.FunctionCall(functionName, args)));
     }
 
     /** Converts {@code org.example.MyMediator} to {@code myMediator}. */
@@ -73,36 +90,44 @@ public class ClassMediatorConverter implements BIRConverter<ScopeContext> {
         return Character.toLowerCase(simpleName.charAt(0)) + simpleName.substring(1);
     }
 
-    private static boolean isStubRegistered(ScopeContext context, String functionName) {
-        return context.shared().functions().stream()
-                .anyMatch(f -> f.functionName().equals(functionName));
-    }
-
-    private static List<Parameter> buildStubParams(ClassMediator mediator) {
+    // Registers the stub the first time its class name is converted, fixing its parameter shape from
+    // that occurrence alone. A later occurrence of the same class name reuses that exact shape rather
+    // than building its own: the class name always maps to the one already registered function, so
+    // every call site must agree on its parameter count regardless of what that occurrence's own
+    // properties resolved to. Returns the parameter names (excluding ctx) in the order
+    // the caller must supply them.
+    private static List<String> registerStub(ScopeContext context, String functionName, ClassMediator classMediator,
+                                              Set<String> propertyNames) {
+        Optional<Function> existing = context.shared().functions().stream()
+                .filter(f -> f.functionName().equals(functionName))
+                .findFirst();
+        if (existing.isPresent()) {
+            return existing.get().parameters().stream().skip(1).map(Parameter::name).toList();
+        }
+        List<String> parameterNames = List.copyOf(propertyNames);
         List<Parameter> params = new ArrayList<>();
         params.add(new Parameter("ctx", new TypeDesc.BallerinaType("Context")));
-        for (Property property : mediator.properties()) {
-            if (property.expression() != null && !property.expression().isBlank()) {
-                // Dynamic (XPath/JSONPath) values are resolved at runtime, so they cannot become
-                // a static string parameter.
-                continue;
-            }
-            params.add(new Parameter(property.name(), BuiltinType.STRING));
-        }
-        return params;
+        parameterNames.forEach(name -> params.add(new Parameter(name, BuiltinType.STRING)));
+        context.shared().addFunction(new Function(
+                functionName, params, buildStubBody(context, classMediator.className())));
+        return parameterNames;
     }
 
-    private static List<Expression> buildCallArgs(ClassMediator mediator, ScopeContext context) {
-        context.ensureContextAvailable();
-        List<Expression> args = new ArrayList<>();
-        args.add(new Expression.VariableReference("ctx"));
-        for (Property property : mediator.properties()) {
-            if (property.expression() != null && !property.expression().isBlank()) {
-                continue;
-            }
-            args.add(new StringConstant(property.value()));
+    // Resolves a property to the string argument passed to the stub, or empty when it has no
+    // supported translation, in which case it is omitted from both the stub's parameters and the call
+    // site's arguments.
+    private static Optional<Expression> resolveArgument(Property property, ScopeContext context) {
+        if (!property.hasExpression() || property.expression().isBlank()) {
+            return Optional.of(new StringConstant(property.value()));
         }
-        return args;
+        SynapseExpression parsed = SynapseExpressionParser.parse(property.expression(), false);
+        if (parsed instanceof SynapseExpression.Literal) {
+            PropertyConverter.reportUnsupported(property, context,
+                    "The expression is not recognized by the property converter; manual conversion required.");
+            return Optional.empty();
+        }
+        return PropertyConverter.resolveExpression(parsed, property.expression(), SynapseType.STRING, context)
+                .map(BallerinaExpression::new);
     }
 
     /**

@@ -24,6 +24,7 @@ import synapse.converter.ConversionContext.UnsupportedEntry;
 import synapse.converter.ScopeContext;
 import synapse.converter.TypeConverter;
 import synapse.converter.bir.BIRConverter;
+import synapse.expression.SynapseExpression;
 import synapse.expression.SynapseExpressionEmitter;
 import synapse.expression.SynapseExpressionEmitter.ExpressionEval;
 import synapse.expression.SynapseExpressionParser;
@@ -112,7 +113,7 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
         return true;
     }
 
-    private static void reportUnsupported(Property property, ScopeContext context, String detail) {
+    public static void reportUnsupported(Property property, ScopeContext context, String detail) {
         String file = context.shared().currentFile();
         String origin = file.isEmpty() ? "" : " (from " + file + ")";
         String snippet = propertySnippet(property);
@@ -176,9 +177,16 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
     // Returns empty for an unsupported expression: a warning has already been recorded and the emitted
     // placeholder is a string that would not type-check against a non-string target, so the caller omits
     // the assignment and leaves the (optional) target unset.
-    private static Optional<String> resolveExpression(String raw, boolean isLiteral, SynapseType expectedType,
+    public static Optional<String> resolveExpression(String raw, boolean isLiteral, SynapseType expectedType,
                                                       ScopeContext context) {
-        ExpressionEval result = emitExpression(raw, isLiteral, context);
+        return resolveExpression(SynapseExpressionParser.parse(raw, isLiteral), raw, expectedType, context);
+    }
+
+    // Same as above, but for a caller that already parsed the raw expression to inspect its shape and
+    // would otherwise have to parse it a second time here.
+    public static Optional<String> resolveExpression(SynapseExpression parsed, String raw, SynapseType expectedType,
+                                                      ScopeContext context) {
+        ExpressionEval result = emitExpression(parsed, raw, context);
         if (result.warning().isPresent()) {
             return Optional.empty();
         }
@@ -191,7 +199,11 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
     }
 
     private static ExpressionEval emitExpression(String raw, boolean isLiteral, ScopeContext context) {
-        ExpressionEval result = SynapseExpressionEmitter.emit(SynapseExpressionParser.parse(raw, isLiteral), raw);
+        return emitExpression(SynapseExpressionParser.parse(raw, isLiteral), raw, context);
+    }
+
+    private static ExpressionEval emitExpression(SynapseExpression parsed, String raw, ScopeContext context) {
+        ExpressionEval result = SynapseExpressionEmitter.emit(parsed, raw);
         result.warning().ifPresent(warning -> context.statements().add(new Statement.Comment(warning)));
         if (result.requiresXmlData()) {
             context.importStatements().add(SynapseExpressionEmitter.XML_DATA_IMPORT);
