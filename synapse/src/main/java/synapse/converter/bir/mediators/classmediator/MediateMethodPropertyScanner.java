@@ -184,29 +184,32 @@ final class MediateMethodPropertyScanner {
         return Optional.empty();
     }
 
+    // Ambiguous when more than one local (anywhere in the method, including other scopes) shares the
+    // name. Falls back to anydata rather than guessing which declaration actually applies.
     @NotNull
     private static Optional<String> tracedLocalType(Expression value, List<VariableDeclarator> locals) {
         if (!(value instanceof NameExpr nameExpr)) {
             return Optional.empty();
         }
-        return locals.stream()
+        List<VariableDeclarator> matches = locals.stream()
                 .filter(decl -> decl.getNameAsString().equals(nameExpr.getNameAsString()))
-                .findFirst()
-                .map(decl -> decl.getType().asString());
+                .toList();
+        return matches.size() == 1 ? Optional.of(matches.get(0).getType().asString()) : Optional.empty();
     }
 
     // A bare call to a same-class method, matched by name and arity; not full overload resolution.
-    // A scoped call or no matching method leaves the caller to fall back to anydata.
+    // A scoped call, no match, or more than one same-arity overload (ambiguous return type) leaves the
+    // caller to fall back to anydata.
     @NotNull
     private static Optional<String> tracedMethodReturnType(Expression value, List<MethodDeclaration> siblingMethods) {
         if (!(value instanceof MethodCallExpr call) || call.getScope().isPresent()) {
             return Optional.empty();
         }
-        return siblingMethods.stream()
+        List<MethodDeclaration> matches = siblingMethods.stream()
                 .filter(candidate -> candidate.getNameAsString().equals(call.getNameAsString())
                         && candidate.getParameters().size() == call.getArguments().size())
-                .findFirst()
-                .map(candidate -> candidate.getType().asString());
+                .toList();
+        return matches.size() == 1 ? Optional.of(matches.get(0).getType().asString()) : Optional.empty();
     }
 
     private static String ballerinaType(String javaType) {

@@ -68,6 +68,7 @@ public class ConversionContext {
     private final Map<String, PropertyInfo> properties = new LinkedHashMap<>();
     private final Map<String, Function> converterFunctions = new LinkedHashMap<>();
     private final Map<String, Function> classMediatorStubs = new LinkedHashMap<>();
+    private final Set<String> reservedFunctionNames = new LinkedHashSet<>();
     private final List<UnsupportedEntry> unsupported = new ArrayList<>();
 
     private DependencyGraph dependencyGraph;
@@ -165,9 +166,20 @@ public class ConversionContext {
         return Optional.ofNullable(classMediatorStubs.get(className));
     }
 
-    /** Whether some other class has already claimed {@code functionName} for its own stub. */
+    /**
+     * Reserves {@code name} so no class mediator stub can claim it — used for the fixed
+     * {@code respond}/{@code emitPayload} functions, which are added directly via {@link #addFunction}
+     * rather than through {@link #addClassMediatorStub} and so wouldn't otherwise be seen by
+     * {@link #isClassMediatorStubNameTaken}.
+     */
+    public void reserveFunctionName(String name) {
+        reservedFunctionNames.add(name);
+    }
+
+    /** Whether {@code functionName} is reserved or already claimed by another class's stub. */
     public boolean isClassMediatorStubNameTaken(String functionName) {
-        return classMediatorStubs.values().stream().anyMatch(f -> f.functionName().equals(functionName));
+        return reservedFunctionNames.contains(functionName)
+                || classMediatorStubs.values().stream().anyMatch(f -> f.functionName().equals(functionName));
     }
 
     @NotNull

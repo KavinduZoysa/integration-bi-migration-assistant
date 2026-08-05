@@ -81,6 +81,48 @@ public class MediateMethodPropertyScannerTest {
     }
 
     @Test
+    public void testAmbiguousLocalName() {
+        ScopeContext context = newContext();
+        JavaSource source = mediator("""
+                if (true) {
+                    int result = 1;
+                } else {
+                    String result = "x";
+                }
+                mc.setProperty("out", result);
+                """);
+
+        MediateMethodPropertyScanner.scan(source, CLASS_NAME, context);
+
+        Assert.assertEquals(context.shared().properties().get("out").types(), Set.of("anydata"));
+    }
+
+    @Test
+    public void testAmbiguousSiblingOverload() {
+        ScopeContext context = newContext();
+        JavaSource source = new JavaSource(CLASS_NAME, """
+                package test;
+                import org.apache.synapse.MessageContext;
+                public class SampleMediator {
+                    private int build(String x) {
+                        return 1;
+                    }
+                    private String build(int y) {
+                        return "z";
+                    }
+                    public boolean mediate(MessageContext mc) {
+                        mc.setProperty("out", build(5));
+                        return true;
+                    }
+                }
+                """, JavaSource.Origin.SOURCE_FILE);
+
+        MediateMethodPropertyScanner.scan(source, CLASS_NAME, context);
+
+        Assert.assertEquals(context.shared().properties().get("out").types(), Set.of("anydata"));
+    }
+
+    @Test
     public void testTracedMethodReturnWrite() {
         ScopeContext context = newContext();
         JavaSource source = new JavaSource(CLASS_NAME, """
