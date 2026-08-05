@@ -137,8 +137,8 @@ public class ClassMediatorConverter implements BIRConverter<ScopeContext> {
     private static List<Statement> buildStubBody(ScopeContext context, String className) {
         return context.shared().javaSourceResolver().resolve(className)
                 .map(ClassMediatorConverter::referenceComment)
-                .orElseGet(() -> List.of(new Statement.BallerinaStatement(
-                        "// TODO: implement '" + className + "' (original Java source not found).")));
+                .orElseGet(() -> List.of(new Statement.Comment(
+                        "TODO: implement '" + className + "' (original Java source not found).")));
     }
 
     /**
@@ -146,8 +146,8 @@ public class ClassMediatorConverter implements BIRConverter<ScopeContext> {
      * original source was found and where it came from.
      */
     public static List<Statement> referenceComment(JavaSource source) {
-        return List.of(new Statement.BallerinaStatement(
-                "// TODO: implement from the original mediator logic (source located: "
+        return List.of(new Statement.Comment(
+                "TODO: implement from the original mediator logic (source located: "
                         + source.origin() + ")."));
     }
 }
