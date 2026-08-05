@@ -22,6 +22,7 @@ import common.BallerinaModel.Import;
 import common.BallerinaModel.ModuleTypeDef;
 import common.BallerinaModel.Service;
 import org.jetbrains.annotations.NotNull;
+import synapse.converter.bir.mediators.classmediator.source.JavaSourceResolver;
 import synapse.model.DependencyGraph;
 
 import java.util.ArrayList;
@@ -69,6 +70,7 @@ public class ConversionContext {
     private final List<UnsupportedEntry> unsupported = new ArrayList<>();
 
     private DependencyGraph dependencyGraph;
+    private JavaSourceResolver javaSourceResolver = new JavaSourceResolver(List.of());
     private String currentFile = "";
 
     public void setDependencyGraph(DependencyGraph dependencyGraph) {
@@ -79,6 +81,17 @@ public class ConversionContext {
         return dependencyGraph;
     }
 
+    /** The resolver used to locate a class mediator's original Java source; empty by default. */
+    @NotNull
+    public JavaSourceResolver javaSourceResolver() {
+        return javaSourceResolver;
+    }
+
+    public void setJavaSourceResolver(JavaSourceResolver javaSourceResolver) {
+        assert javaSourceResolver != null : "javaSourceResolver must not be null";
+        this.javaSourceResolver = javaSourceResolver;
+    }
+    
     /**
      * The source artifact file currently being converted, relative to the migration source root. Set by
      * {@code SynapseConverter} before each artifact so converters can attribute a to-do to its origin.

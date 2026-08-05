@@ -22,6 +22,7 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import synapse.model.Synapse.Api;
+import synapse.model.Synapse.ClassMediator;
 import synapse.model.Synapse.InSequence;
 import synapse.model.Synapse.PayloadFactory;
 import synapse.model.Synapse.Property;
@@ -58,6 +59,7 @@ public class SynapseModelGenerator {
     private static final String RESPOND_TAG = "respond";
     private static final String PROPERTY_TAG = "property";
     private static final String FORMAT_TAG = "format";
+    private static final String CLASS_TAG = "class";
 
     private static final String DEFAULT_PROPERTY_SCOPE = "default";
     private static final String DEFAULT_PROPERTY_ACTION = "set";
@@ -191,6 +193,7 @@ public class SynapseModelGenerator {
                 }
                 yield new SequenceMediator(key);
             }
+            case CLASS_TAG -> readClass(child);
             // An unsupported mediator is captured verbatim as a to-do rather than dropped. For a
             // control-flow wrapper, its nested mediator sequences are still read so supported children
             // can be converted; all other mediators are opaque leaves.
@@ -288,5 +291,19 @@ public class SynapseModelGenerator {
             }
         }
         return elements;
+    }
+
+    private static ClassMediator readClass(Element element) {
+        String className = element.getAttribute("name");
+        if (className.isBlank()) {
+            throw new IllegalArgumentException("Synapse class mediator must define a non-empty 'name'.");
+        }
+        List<Property> properties = new ArrayList<>();
+        for (Element child : childElements(element)) {
+            if (PROPERTY_TAG.equals(child.getTagName())) {
+                properties.add(readProperty(child));
+            }
+        }
+        return new ClassMediator(className, properties);
     }
 }

@@ -75,6 +75,15 @@ public record Synapse() {
             this(Kind.SEQUENCE_MEDIATOR, key);
         }
     }
+  
+    // <class name="org.example.MyMediator">
+    //   <property name="key" value="val"/>
+    // </class>
+    public record ClassMediator(Kind kind, String className, List<Property> properties) implements SynapseNode {
+        public ClassMediator(String className, List<Property> properties) {
+            this(Kind.CLASS_MEDIATOR, className, properties);
+        }
+    }
 
     // <property name="..." scope="default|transport|axis2|axis2-client" type="string" value="..."
     //           expression="..." action="set|remove"> <om-element/>? </property>
@@ -130,6 +139,7 @@ public record Synapse() {
         RESPOND,
         PROPERTY,
         SEQUENCE_MEDIATOR,
+        CLASS_MEDIATOR,
         UNSUPPORTED_MEDIATOR,
         UNSUPPORTED_ARTIFACT
     }
