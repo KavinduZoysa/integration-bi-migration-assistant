@@ -1,0 +1,11 @@
+<api context="/order" name="OrderClass" xmlns="http://ws.apache.org/ns/synapse">
+    <resource methods="GET" uri-template="/process">
+        <inSequence>
+            <payloadFactory media-type="json">
+                <format>{"msg":"processing"}</format>
+            </payloadFactory>
+            <class name="javasamples.OrderMediator"/>
+            <respond/>
+        </inSequence>
+    </resource>
+</api>

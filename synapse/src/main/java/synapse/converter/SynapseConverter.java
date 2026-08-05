@@ -214,6 +214,7 @@ public final class SynapseConverter {
             }
             addContextRecord(context);
             context.converterFunctions().forEach(context::addFunction);
+            context.classMediatorStubs().forEach(context::addFunction);
             addRespondFunction(context);
             addEmitPayloadFunction(context);
             if (dependencyGraph.sortedNodes().isEmpty() || !context.records().isEmpty()) {

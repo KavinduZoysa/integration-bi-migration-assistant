@@ -1,7 +1,7 @@
 import ballerina/http;
 
 public type Variables record {|
-    string who?;
+    string greeting?;
 |};
 
 public type Context record {|

@@ -23,6 +23,13 @@ dependencies {
     testImplementation group: 'com.google.code.gson', name: 'gson', version: "${gsonVersion}"
     spotbugs group: 'com.github.spotbugs', name: 'spotbugs', version: "${spotbugsVersion}"
     implementation group: 'org.benf', name: 'cfr', version: "${cfrVersion}"
+    implementation group: 'com.github.javaparser', name: 'javaparser-core', version: "${javaParserVersion}"
+}
+
+test {
+    useTestNG() {
+        suites 'src/test/resources/testng.xml'
+    }
 }
 
 checkstyle {

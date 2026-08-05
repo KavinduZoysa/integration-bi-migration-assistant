@@ -67,6 +67,7 @@ public class ConversionContext {
     private final Map<String, Set<Import>> importsByFile = new HashMap<>();
     private final Map<String, PropertyInfo> properties = new LinkedHashMap<>();
     private final Map<String, Function> converterFunctions = new LinkedHashMap<>();
+    private final Map<String, Function> classMediatorStubs = new LinkedHashMap<>();
     private final List<UnsupportedEntry> unsupported = new ArrayList<>();
 
     private DependencyGraph dependencyGraph;
@@ -148,6 +149,30 @@ public class ConversionContext {
 
     public Collection<Function> converterFunctions() {
         return converterFunctions.values();
+    }
+
+    /**
+     * Registers the stub function generated for a class mediator, keyed by class name so every
+     * occurrence reuses one stub. Preserved across {@link #clearArtifactOutput()} and flushed
+     * into {@link #functions()} once.
+     */
+    public void addClassMediatorStub(String className, Function function) {
+        classMediatorStubs.putIfAbsent(className, function);
+    }
+
+    @NotNull
+    public Optional<Function> classMediatorStub(String className) {
+        return Optional.ofNullable(classMediatorStubs.get(className));
+    }
+
+    /** Whether some other class has already claimed {@code functionName} for its own stub. */
+    public boolean isClassMediatorStubNameTaken(String functionName) {
+        return classMediatorStubs.values().stream().anyMatch(f -> f.functionName().equals(functionName));
+    }
+
+    @NotNull
+    public Collection<Function> classMediatorStubs() {
+        return classMediatorStubs.values();
     }
 
     public void addRecord(ModuleTypeDef record) {
