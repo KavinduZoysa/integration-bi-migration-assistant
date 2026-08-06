@@ -68,7 +68,7 @@ public class ConversionContext {
     private final Map<String, PropertyInfo> properties = new LinkedHashMap<>();
     private final Map<String, Function> converterFunctions = new LinkedHashMap<>();
     private final Map<String, Function> classMediatorStubs = new LinkedHashMap<>();
-    private final Set<String> reservedFunctionNames = new LinkedHashSet<>();
+    private final Set<String> generatedFunctionNames = new LinkedHashSet<>();
     private final List<UnsupportedEntry> unsupported = new ArrayList<>();
 
     private DependencyGraph dependencyGraph;
@@ -131,6 +131,7 @@ public class ConversionContext {
 
     public void addFunction(Function function) {
         functions.add(function);
+        generatedFunctionNames.add(function.functionName());
     }
 
     public List<Function> functions() {
@@ -146,6 +147,7 @@ public class ConversionContext {
      */
     public void addConverterFunction(Function function) {
         converterFunctions.putIfAbsent(function.functionName(), function);
+        generatedFunctionNames.add(function.functionName());
     }
 
     public Collection<Function> converterFunctions() {
@@ -159,6 +161,7 @@ public class ConversionContext {
      */
     public void addClassMediatorStub(String className, Function function) {
         classMediatorStubs.putIfAbsent(className, function);
+        generatedFunctionNames.add(function.functionName());
     }
 
     @NotNull
@@ -168,18 +171,21 @@ public class ConversionContext {
 
     /**
      * Reserves {@code name} so no class mediator stub can claim it — used for the fixed
-     * {@code respond}/{@code emitPayload} functions, which are added directly via {@link #addFunction}
-     * rather than through {@link #addClassMediatorStub} and so wouldn't otherwise be seen by
-     * {@link #isClassMediatorStubNameTaken}.
+     * {@code respond}/{@code emitPayload} functions, whose names must be off-limits from the start of the
+     * run, before {@link #addFunction} is called for them at the very end.
      */
     public void reserveFunctionName(String name) {
-        reservedFunctionNames.add(name);
+        generatedFunctionNames.add(name);
     }
 
-    /** Whether {@code functionName} is reserved or already claimed by another class's stub. */
+    /**
+     * Whether {@code functionName} is already claimed by any generated function — reserved, a sequence or
+     * other function added via {@link #addFunction}, a converter helper, or another class's stub. Every
+     * one of those registers its name here as it's created, so this check catches a collision regardless
+     * of which kind of function claimed the name first.
+     */
     public boolean isClassMediatorStubNameTaken(String functionName) {
-        return reservedFunctionNames.contains(functionName)
-                || classMediatorStubs.values().stream().anyMatch(f -> f.functionName().equals(functionName));
+        return generatedFunctionNames.contains(functionName);
     }
 
     @NotNull
