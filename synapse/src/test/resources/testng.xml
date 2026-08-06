@@ -2,7 +2,7 @@
 <suite name="Suite" time-out="120000">
     <test name="Synapse Tests">
         <packages>
-            <package name="synapse.converter.bir.mediators.classmediator"/>
+            <package name="synapse.converter.bir.mediators.classmediator.*"/>
         </packages>
     </test>
 </suite>

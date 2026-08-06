@@ -160,7 +160,7 @@ final class MediateMethodPropertyScanner {
         return Optional.empty();
     }
 
-    // The name isn't a string literal (a constant, a computed name, ...), so nothing can be registered;
+    // The name isn't a string literal, so nothing can be registered;
     // report it instead of silently dropping the touch.
     private static void reportUnresolvedPropertyName(MethodCallExpr call, ScopeContext context) {
         reportUnsupported(context, "The property name is not a string literal; manual conversion "
