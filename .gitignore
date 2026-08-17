@@ -45,3 +45,5 @@ bin/
 .classpath
 .project
 .cursor
+
+.claude

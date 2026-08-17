@@ -11,6 +11,8 @@ public class BranchMediator extends AbstractMediator {
             mc.setProperty("greeting", "Hello");
         } else if ("fr".equals(lang)) {
             mc.setProperty("greeting", "Bonjour");
+        } else if ("num".equals(lang)) {
+            mc.setProperty("greeting", 1234);
         } else {
             mc.setProperty("greeting", "Hi");
         }

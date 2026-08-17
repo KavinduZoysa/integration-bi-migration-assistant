@@ -22,6 +22,7 @@ import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.BooleanLiteralExpr;
 import com.github.javaparser.ast.expr.DoubleLiteralExpr;
@@ -31,13 +32,17 @@ import com.github.javaparser.ast.expr.LongLiteralExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
+import com.github.javaparser.ast.expr.ThisExpr;
 import org.jetbrains.annotations.NotNull;
 import synapse.converter.ConversionContext.UnsupportedEntry;
 import synapse.converter.ScopeContext;
 import synapse.converter.bir.mediators.classmediator.source.JavaSource;
 
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Scans a class mediator's {@code mediate(MessageContext)} method for every {@code setProperty} touch
@@ -118,15 +123,27 @@ final class MediateMethodPropertyScanner {
     }
 
     // Walks every call, not just top-level statements, so a touch nested in an if/loop is still found.
+    // Also recurses into same-class helper methods that the context object is passed into, so a touch
+    // written inside a called helper is still found.
     private static void scanMethod(MediateMethod found, ScopeContext context) {
         MethodDeclaration method = found.method();
         String paramName = method.getParameter(0).getNameAsString();
-        List<VariableDeclarator> locals = method.findAll(VariableDeclarator.class);
         List<MethodDeclaration> siblingMethods = found.declaringClass().getMethods();
+        Set<MethodDeclaration> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        visited.add(method);
+        scanMethodBody(method, paramName, siblingMethods, visited, context);
+    }
+
+    private static void scanMethodBody(MethodDeclaration method, String contextParamName,
+                                        List<MethodDeclaration> siblingMethods, Set<MethodDeclaration> visited,
+                                        ScopeContext context) {
+        List<VariableDeclarator> locals = method.findAll(VariableDeclarator.class);
         for (MethodCallExpr call : method.findAll(MethodCallExpr.class)) {
-            if (isCallOn(call, paramName) && SET_PROPERTY.equals(call.getNameAsString())
+            if (isCallOn(call, contextParamName) && SET_PROPERTY.equals(call.getNameAsString())
                     && call.getArguments().size() == 2) {
                 registerWrite(call, locals, siblingMethods, context);
+            } else if (isBareOrThisCall(call)) {
+                tracePassedContextCall(call, contextParamName, siblingMethods, visited, context);
             }
         }
     }
@@ -134,6 +151,50 @@ final class MediateMethodPropertyScanner {
     private static boolean isCallOn(MethodCallExpr call, String paramName) {
         return call.getScope().isPresent() && call.getScope().get() instanceof NameExpr scope
                 && scope.getNameAsString().equals(paramName);
+    }
+
+    private static boolean isBareOrThisCall(MethodCallExpr call) {
+        return call.getScope().isEmpty() || call.getScope().get() instanceof ThisExpr;
+    }
+
+    // Follows the context object being passed into a same-class helper, matched by name + arity like
+    // tracedMethodReturnType below - not a full call graph. An ambiguous or unresolved helper call is
+    // left alone rather than guessed at; visited guards against infinite recursion on helpers that call
+    // back into an ancestor.
+    private static void tracePassedContextCall(MethodCallExpr call, String contextParamName,
+                                                 List<MethodDeclaration> siblingMethods,
+                                                 Set<MethodDeclaration> visited, ScopeContext context) {
+        int argIndex = indexOfContextArgument(call, contextParamName);
+        if (argIndex < 0) {
+            return;
+        }
+        List<MethodDeclaration> matches = siblingMethods.stream()
+                .filter(candidate -> candidate.getNameAsString().equals(call.getNameAsString())
+                        && candidate.getParameters().size() == call.getArguments().size())
+                .toList();
+        if (matches.size() != 1) {
+            return;
+        }
+        MethodDeclaration callee = matches.getFirst();
+        if (visited.contains(callee) || callee.getBody().isEmpty()) {
+            return;
+        }
+        Parameter calleeParam = callee.getParameter(argIndex);
+        if (!calleeParam.getType().asString().endsWith(MESSAGE_CONTEXT_TYPE)) {
+            return;
+        }
+        visited.add(callee);
+        scanMethodBody(callee, calleeParam.getNameAsString(), siblingMethods, visited, context);
+    }
+
+    private static int indexOfContextArgument(MethodCallExpr call, String contextParamName) {
+        for (int i = 0; i < call.getArguments().size(); i++) {
+            if (call.getArgument(i) instanceof NameExpr nameExpr
+                    && nameExpr.getNameAsString().equals(contextParamName)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     // mc.setProperty("x", valueExpr): traces a literal, a local variable, or a sibling method call to a
