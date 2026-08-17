@@ -19,6 +19,7 @@ package synapse.model;
 
 import synapse.model.DependencyGraph.ArtifactNode;
 import synapse.model.Synapse.Api;
+import synapse.model.Synapse.FaultSequence;
 import synapse.model.Synapse.InSequence;
 import synapse.model.Synapse.Kind;
 import synapse.model.Synapse.Resource;
@@ -34,6 +35,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * Resolves the artifacts that a given {@link ArtifactNode} depends on.
@@ -57,7 +59,7 @@ public class DependencyResolver {
     }
 
     public List<ArtifactNode> resolve(ArtifactNode artifact) {
-        List<String> sequenceKeys = new ArrayList<>();
+        Set<String> sequenceKeys = new LinkedHashSet<>();
         collectSequenceKeys(findArtifact(artifact), sequenceKeys);
 
         List<ArtifactNode> resolved = new ArrayList<>();
@@ -94,22 +96,44 @@ public class DependencyResolver {
         };
     }
 
-    private static void collectSequenceKeys(SynapseNode node, List<String> sequenceKeys) {
+    private void collectSequenceKeys(SynapseNode node, Set<String> sequenceKeys) {
         switch (node) {
             case Api api -> api.resources().forEach(resource -> collectSequenceKeys(resource, sequenceKeys));
             case Resource resource -> {
                 if (resource.inSequence() != null) {
                     collectSequenceKeys(resource.inSequence(), sequenceKeys);
                 }
+                if (resource.faultSequence() != null) {
+                    collectSequenceKeys(resource.faultSequence(), sequenceKeys);
+                }
+                String faultSequenceKey = resource.faultSequenceKey();
+                if (!faultSequenceKey.isBlank()) {
+                    sequenceKeys.add(faultSequenceKey);
+                }
+                addImplicitDefaultFaultSequenceKey(resource, sequenceKeys);
             }
             case InSequence inSequence ->
                     inSequence.mediators().forEach(mediator -> collectSequenceKeys(mediator, sequenceKeys));
+            case FaultSequence faultSequence ->
+                    faultSequence.mediators().forEach(mediator -> collectSequenceKeys(mediator, sequenceKeys));
             case Sequence sequence ->
                     sequence.mediators().forEach(mediator -> collectSequenceKeys(mediator, sequenceKeys));
             case SequenceMediator sequenceMediator -> sequenceKeys.add(sequenceMediator.key());
             case Unsupported unsupported ->
                     unsupported.children().forEach(child -> collectSequenceKeys(child, sequenceKeys));
             default -> { }
+        }
+    }
+
+    // A resource with no faultSequenceKey and no inline faultSequence, or one whose faultSequenceKey
+    // names no known sequence, implicitly depends on the project's "fault" sequence when one exists.
+    // sequenceKeys is a Set, so this is a no-op when "fault" was already collected some other way
+    // (e.g. an explicit <sequence key="fault"/> reference).
+    private void addImplicitDefaultFaultSequenceKey(Resource resource, Set<String> sequenceKeys) {
+        Predicate<String> sequenceExists = sequencesByName::containsKey;
+        if (resource.fallsBackToDefaultFaultSequence(sequenceExists)
+                && sequencesByName.containsKey(Synapse.DEFAULT_FAULT_SEQUENCE_KEY)) {
+            sequenceKeys.add(Synapse.DEFAULT_FAULT_SEQUENCE_KEY);
         }
     }
 }

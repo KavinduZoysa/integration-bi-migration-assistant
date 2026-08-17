@@ -18,6 +18,7 @@
 
 package synapse.converter;
 
+import common.BallerinaModel.Expression.BooleanConstant;
 import common.BallerinaModel.Expression.MappingConstructor;
 import common.BallerinaModel.Expression.NilConstant;
 import common.BallerinaModel.Function;
@@ -100,6 +101,7 @@ public final class SynapseConverter {
     private static final String AXIS2_FIELD = "axis2";
     private static final String STATUS_CODE_FIELD = "statusCode";
     private static final String CALLER_FIELD = "caller";
+    private static final String RESPONDED_FIELD = "responded";
     private static final String REQUEST_PARAM = "request";
     private static final String RESPOND_FUNCTION = "respond";
     private static final String EMIT_PAYLOAD_FUNCTION = "emitPayload";
@@ -370,15 +372,24 @@ public final class SynapseConverter {
                 new RecordField(AXIS2_FIELD, new MapTypeDesc(BuiltinType.ANYDATA),
                         new MappingConstructor(List.of())),
                 new RecordField(STATUS_CODE_FIELD, BuiltinType.INT, true),
-                new RecordField(CALLER_FIELD, new BallerinaType(HTTP_CALLER), true)))));
+                new RecordField(CALLER_FIELD, new BallerinaType(HTTP_CALLER), true),
+                new RecordField(RESPONDED_FIELD, BuiltinType.BOOLEAN, new BooleanConstant(false))))));
     }
 
+    // Guarded by ctx.responded so a resource's on-fail handler can unconditionally call respond() as a
+    // safety net: if the mediation that failed was itself a respond, the caller has already had a
+    // response attempted on it, and calling ->respond() again would error instead of the original
+    // failure being reported. ctx.responded is set before the actual respond attempt (not after it
+    // succeeds) so that an error from the attempt itself still marks it as attempted, rather than
+    // letting the safety net retry on the same caller and mask the original error.
     private static void addRespondFunction(ConversionContext context) {
         context.addImports(ConversionContext.FUNCTIONS_BAL_FILE, List.of(new Import("ballerina", "http")));
         context.addFunction(new Function(RESPOND_FUNCTION,
                 List.of(new Parameter("ctx", new BallerinaType(CONTEXT_TYPE))),
                 new BallerinaType(ERROR_OPTIONAL),
                 List.of(
+                        new Statement.BallerinaStatement("if ctx.responded { return; }"),
+                        new Statement.BallerinaStatement("ctx.responded = true;"),
                         new Statement.BallerinaStatement("http:Response response = new;"),
                         new Statement.BallerinaStatement("response.setPayload(ctx.payload);"),
                         new Statement.BallerinaStatement(

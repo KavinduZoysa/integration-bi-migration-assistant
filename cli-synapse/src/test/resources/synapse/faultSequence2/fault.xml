@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="fault" xmlns="http://ws.apache.org/ns/synapse">
+    <property name="msg" scope="default" expression="get-property('ERROR_MESSAGE')"/>
+    <payloadFactory media-type="json" template-type="default">
+        <format>{"error":"unexpected failure"}</format>
+    </payloadFactory>
+    <respond/>
+</sequence>

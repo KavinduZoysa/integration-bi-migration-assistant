@@ -21,8 +21,11 @@ import org.jetbrains.annotations.NotNull;
 import synapse.expression.SynapseExpression.Literal;
 import synapse.expression.SynapseExpression.PropertyExpression;
 import synapse.expression.SynapseExpression.ScopeExpression;
+import synapse.expression.SynapseExpression.UnsupportedCall;
 import synapse.expression.SynapseExpression.XPathExpression;
 
+import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -44,6 +47,13 @@ public final class SynapseExpressionParser {
 
     private static final Pattern INT_PATTERN = Pattern.compile("[+-]?\\d+");
     private static final Pattern FLOAT_PATTERN = Pattern.compile("[+-]?(\\d+\\.\\d*|\\.\\d+|\\d+)([eE][+-]?\\d+)?");
+
+    // get-property('name'), the single-argument default-scope form. Anything else (unrecognized name,
+    // or the two-argument get-property('scope', 'name') form) becomes an UnsupportedCall instead of
+    // silently falling through to parseLiteral as a string.
+    private static final Pattern GET_PROPERTY_PATTERN =
+            Pattern.compile("get-property\\(\\s*['\"]([^'\"]*)['\"]\\s*\\)");
+    private static final Set<String> DEFAULT_SCOPE_PROPERTIES = Set.of("ERROR_MESSAGE");
 
     private SynapseExpressionParser() {
     }
@@ -103,6 +113,10 @@ public final class SynapseExpressionParser {
             return new XPathExpression(BODY_SCOPE, "", expression);
         }
 
+        if (expression.startsWith("get-property(")) {
+            return parseGetProperty(expression);
+        }
+
         if (expression.charAt(0) == '$') {
             String withoutDollar = expression.substring(1);
             int pathStart = withoutDollar.indexOf(PATH_SEPARATOR);
@@ -130,5 +144,15 @@ public final class SynapseExpressionParser {
         }
 
         return parseLiteral(expression);
+    }
+
+    // e.g. get-property('ERROR_MESSAGE') -> $ctx:ERROR_MESSAGE; anything else -> UnsupportedCall.
+    @NotNull
+    private static SynapseExpression parseGetProperty(String expression) {
+        Matcher matcher = GET_PROPERTY_PATTERN.matcher(expression);
+        if (matcher.matches() && DEFAULT_SCOPE_PROPERTIES.contains(matcher.group(1))) {
+            return new PropertyExpression(DEFAULT_SCOPE, matcher.group(1));
+        }
+        return new UnsupportedCall(expression);
     }
 }

@@ -29,6 +29,7 @@ import org.jetbrains.annotations.NotNull;
 import synapse.expression.SynapseExpression.Literal;
 import synapse.expression.SynapseExpression.PropertyExpression;
 import synapse.expression.SynapseExpression.ScopeExpression;
+import synapse.expression.SynapseExpression.UnsupportedCall;
 import synapse.expression.SynapseExpression.XPathExpression;
 import synapse.model.SynapseType;
 
@@ -124,6 +125,8 @@ public final class SynapseExpressionEmitter {
                     .map(val -> ExpressionEval.of(val))
                     .orElseGet(() -> ExpressionEval.unsupported(raw, "unsupported Synapse scope in expression"));
             case XPathExpression xpath -> resolveXPathExpression(xpath, raw);
+            case UnsupportedCall call ->
+                    ExpressionEval.unsupported(raw, "unsupported get-property(...) call in expression");
         };
     }
 

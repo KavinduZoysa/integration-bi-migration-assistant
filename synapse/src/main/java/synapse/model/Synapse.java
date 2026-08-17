@@ -18,8 +18,13 @@
 package synapse.model;
 
 import java.util.List;
+import java.util.function.Predicate;
 
 public record Synapse() {
+
+    // The conventional project-level sequence name a resource with no faultSequence of its own falls
+    // back to implicitly, if one exists.
+    public static final String DEFAULT_FAULT_SEQUENCE_KEY = "fault";
 
     public record Api(Kind kind, String name, String context, List<SynapseNode> resources)
             implements SynapseNode {
@@ -30,11 +35,23 @@ public record Synapse() {
 
     // matchAnyPath is set when the Synapse resource declares neither 'uri-template' nor 'url-mapping';
     // such a resource matches any path, converted to a Ballerina rest path parameter ([string... path]).
+    // faultSequenceKey is the resource's faultSequence="X" attribute (empty when absent): a named
+    // reference taking priority over the inline faultSequence element below.
     public record Resource(Kind kind, String methods, String path, boolean matchAnyPath,
-                           List<String> queryParams, InSequence inSequence) implements SynapseNode {
+                           List<String> queryParams, InSequence inSequence,
+                           FaultSequence faultSequence, String faultSequenceKey) implements SynapseNode {
         public Resource(String methods, String path, boolean matchAnyPath, List<String> queryParams,
-                        InSequence inSequence) {
-            this(Kind.RESOURCE, methods, path, matchAnyPath, queryParams, inSequence);
+                        InSequence inSequence, FaultSequence faultSequence, String faultSequenceKey) {
+            this(Kind.RESOURCE, methods, path, matchAnyPath, queryParams, inSequence, faultSequence,
+                    faultSequenceKey);
+        }
+
+        // A faultSequenceKey naming no known sequence, or no faultSequenceKey and no inline
+        // faultSequence, means this resource falls back to the project's default "fault" sequence.
+        // sequenceExists tells whether a given key names a known sequence, in whichever form the
+        // caller has that knowledge available (converted metadata, or a raw artifact lookup).
+        public boolean fallsBackToDefaultFaultSequence(Predicate<String> sequenceExists) {
+            return faultSequenceKey.isBlank() ? faultSequence == null : !sequenceExists.test(faultSequenceKey);
         }
     }
 
@@ -42,6 +59,14 @@ public record Synapse() {
     public record InSequence(Kind kind, List<SynapseNode> mediators) implements SynapseNode {
         public InSequence(List<SynapseNode> mediators) {
             this(Kind.IN_SEQUENCE, mediators);
+        }
+    }
+
+    // <faultSequence> ... </faultSequence> -> the error-handling mediator sequence of a resource, run
+    // when mediating its inSequence fails. Converted to a Ballerina 'on fail' clause.
+    public record FaultSequence(Kind kind, List<SynapseNode> mediators) implements SynapseNode {
+        public FaultSequence(List<SynapseNode> mediators) {
+            this(Kind.FAULT_SEQUENCE, mediators);
         }
     }
 
@@ -134,6 +159,7 @@ public record Synapse() {
         API,
         RESOURCE,
         IN_SEQUENCE,
+        FAULT_SEQUENCE,
         SEQUENCE,
         PAYLOAD_FACTORY,
         RESPOND,

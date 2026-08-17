@@ -57,4 +57,9 @@ public sealed interface SynapseExpression {
     // XPath applies to the scope root itself, as in the payload-rooted bare XPath //items.
     record XPathExpression(String scope, String propertyName, String xpath) implements SynapseExpression {
     }
+
+    // A get-property(...) call with no Ballerina mapping, e.g. get-property('axis2', 'HTTP_SC') or an
+    // unrecognized property name.
+    record UnsupportedCall(String raw) implements SynapseExpression {
+    }
 }

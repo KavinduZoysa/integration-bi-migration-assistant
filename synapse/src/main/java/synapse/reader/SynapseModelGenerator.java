@@ -23,6 +23,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import synapse.model.Synapse.Api;
 import synapse.model.Synapse.ClassMediator;
+import synapse.model.Synapse.FaultSequence;
 import synapse.model.Synapse.InSequence;
 import synapse.model.Synapse.PayloadFactory;
 import synapse.model.Synapse.Property;
@@ -55,6 +56,7 @@ public class SynapseModelGenerator {
     private static final String DEFINITIONS_TAG = "definitions";
     private static final String RESOURCE_TAG = "resource";
     private static final String IN_SEQUENCE_TAG = "inSequence";
+    private static final String FAULT_SEQUENCE_TAG = "faultSequence";
     private static final String PAYLOAD_FACTORY_TAG = "payloadFactory";
     private static final String RESPOND_TAG = "respond";
     private static final String PROPERTY_TAG = "property";
@@ -118,6 +120,7 @@ public class SynapseModelGenerator {
 
     private static Resource readResource(Element element) {
         String methods = element.getAttribute("methods");
+        String faultSequenceKey = element.getAttribute("faultSequence");
 
         String uriTemplate = element.getAttribute("uri-template");
         String urlMapping = element.getAttribute("url-mapping");
@@ -148,14 +151,16 @@ public class SynapseModelGenerator {
         }
 
         InSequence inSequence = null;
+        FaultSequence faultSequence = null;
         for (Element child : childElements(element)) {
-            if (IN_SEQUENCE_TAG.equals(child.getTagName())) {
+            if (IN_SEQUENCE_TAG.equals(child.getTagName()) && inSequence == null) {
                 inSequence = readInSequence(child);
-                break;
+            } else if (FAULT_SEQUENCE_TAG.equals(child.getTagName()) && faultSequence == null) {
+                faultSequence = readFaultSequence(child);
             }
         }
 
-        return new Resource(methods, path, matchAnyPath, queryParams, inSequence);
+        return new Resource(methods, path, matchAnyPath, queryParams, inSequence, faultSequence, faultSequenceKey);
     }
 
     private static Sequence readSequence(Element element) {
@@ -170,6 +175,10 @@ public class SynapseModelGenerator {
 
     private static InSequence readInSequence(Element element) {
         return new InSequence(readMediators(element));
+    }
+
+    private static FaultSequence readFaultSequence(Element element) {
+        return new FaultSequence(readMediators(element));
     }
 
     private static List<SynapseNode> readMediators(Element element) {
