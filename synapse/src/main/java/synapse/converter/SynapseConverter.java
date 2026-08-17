@@ -184,6 +184,10 @@ public final class SynapseConverter {
         ConversionContext context = new ConversionContext();
         context.setDependencyGraph(dependencyGraph);
         context.setJavaSourceResolver(new JavaSourceResolver(javaSourceRoots, javaArchives, decompiler));
+        // Reserved before any artifact is converted, so a class mediator stub can never collide with
+        // these fixed functions
+        context.reserveFunctionName(RESPOND_FUNCTION);
+        context.reserveFunctionName(EMIT_PAYLOAD_FUNCTION);
 
         Path sourceRoot = sourceRoot(sourcePath);
         registerUnsupportedArtifacts(dependencyGraph, context, sourceRoot);
@@ -214,6 +218,7 @@ public final class SynapseConverter {
             }
             addContextRecord(context);
             context.converterFunctions().forEach(context::addFunction);
+            context.classMediatorStubs().forEach(context::addFunction);
             addRespondFunction(context);
             addEmitPayloadFunction(context);
             if (dependencyGraph.sortedNodes().isEmpty() || !context.records().isEmpty()) {

@@ -67,6 +67,8 @@ public class ConversionContext {
     private final Map<String, Set<Import>> importsByFile = new HashMap<>();
     private final Map<String, PropertyInfo> properties = new LinkedHashMap<>();
     private final Map<String, Function> converterFunctions = new LinkedHashMap<>();
+    private final Map<String, Function> classMediatorStubs = new LinkedHashMap<>();
+    private final Set<String> generatedFunctionNames = new LinkedHashSet<>();
     private final List<UnsupportedEntry> unsupported = new ArrayList<>();
 
     private DependencyGraph dependencyGraph;
@@ -129,6 +131,7 @@ public class ConversionContext {
 
     public void addFunction(Function function) {
         functions.add(function);
+        generatedFunctionNames.add(function.functionName());
     }
 
     public List<Function> functions() {
@@ -144,10 +147,50 @@ public class ConversionContext {
      */
     public void addConverterFunction(Function function) {
         converterFunctions.putIfAbsent(function.functionName(), function);
+        generatedFunctionNames.add(function.functionName());
     }
 
     public Collection<Function> converterFunctions() {
         return converterFunctions.values();
+    }
+
+    /**
+     * Registers the stub function generated for a class mediator, keyed by class name so every
+     * occurrence reuses one stub. Preserved across {@link #clearArtifactOutput()} and flushed
+     * into {@link #functions()} once.
+     */
+    public void addClassMediatorStub(String className, Function function) {
+        classMediatorStubs.putIfAbsent(className, function);
+        generatedFunctionNames.add(function.functionName());
+    }
+
+    @NotNull
+    public Optional<Function> classMediatorStub(String className) {
+        return Optional.ofNullable(classMediatorStubs.get(className));
+    }
+
+    /**
+     * Reserves {@code name} so no class mediator stub can claim it — used for the fixed
+     * {@code respond}/{@code emitPayload} functions, whose names must be off-limits from the start of the
+     * run, before {@link #addFunction} is called for them at the very end.
+     */
+    public void reserveFunctionName(String name) {
+        generatedFunctionNames.add(name);
+    }
+
+    /**
+     * Whether {@code functionName} is already claimed by any generated function — reserved, a sequence or
+     * other function added via {@link #addFunction}, a converter helper, or another class's stub. Every
+     * one of those registers its name here as it's created, so this check catches a collision regardless
+     * of which kind of function claimed the name first.
+     */
+    public boolean isClassMediatorStubNameTaken(String functionName) {
+        return generatedFunctionNames.contains(functionName);
+    }
+
+    @NotNull
+    public Collection<Function> classMediatorStubs() {
+        return classMediatorStubs.values();
     }
 
     public void addRecord(ModuleTypeDef record) {

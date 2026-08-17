@@ -2,6 +2,7 @@ import ballerina/http;
 
 public type Variables record {|
     string who?;
+    string greetingMessage?;
 |};
 
 public type Context record {|

@@ -1,0 +1,11 @@
+<api context="/branch" name="BranchClass" xmlns="http://ws.apache.org/ns/synapse">
+    <resource methods="GET" uri-template="/greet">
+        <inSequence>
+            <payloadFactory media-type="json">
+                <format>{"msg":"hello"}</format>
+            </payloadFactory>
+            <class name="javasamples.BranchMediator"/>
+            <respond/>
+        </inSequence>
+    </resource>
+</api>
