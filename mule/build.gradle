@@ -15,8 +15,9 @@ dependencies {
     implementation group: 'org.ballerinalang', name: 'ballerina-tools-api', version: "${ballerinaLangVersion}"
 
     // RAML to OpenAPI conversion. The library exposes all of its dependencies as runtime-only, so the
-    // OpenAPI model and serializer types used in our own signatures are declared explicitly.
-    implementation(group: 'raml-to-openapi-converter', name: 'raml-to-openapi',
+    // io.swagger.v3.oas OpenAPI model and serializer types used in our own signatures are declared
+    // explicitly. Those types ship in the io.swagger.core.v3 artifacts.
+    implementation(group: 'org.nipunaml.ramltoopenapi', name: 'raml-to-openapi',
             version: "${ramlToOpenApiVersion}") {
         exclude group: 'ch.qos.logback'
     }
