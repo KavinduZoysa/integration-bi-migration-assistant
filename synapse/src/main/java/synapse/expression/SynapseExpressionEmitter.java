@@ -126,7 +126,7 @@ public final class SynapseExpressionEmitter {
                     .orElseGet(() -> ExpressionEval.unsupported(raw, "unsupported Synapse scope in expression"));
             case XPathExpression xpath -> resolveXPathExpression(xpath, raw);
             case UnsupportedCall call ->
-                    ExpressionEval.unsupported(raw, "unsupported get-property(...) call in expression");
+                    ExpressionEval.unsupported(call.raw(), "unsupported get-property(...) call in expression");
         };
     }
 

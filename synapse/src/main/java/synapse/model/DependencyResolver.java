@@ -103,12 +103,11 @@ public class DependencyResolver {
                 if (resource.inSequence() != null) {
                     collectSequenceKeys(resource.inSequence(), sequenceKeys);
                 }
-                if (resource.faultSequence() != null) {
-                    collectSequenceKeys(resource.faultSequence(), sequenceKeys);
-                }
                 String faultSequenceKey = resource.faultSequenceKey();
                 if (!faultSequenceKey.isBlank()) {
                     sequenceKeys.add(faultSequenceKey);
+                } else if (resource.faultSequence() != null) {
+                    collectSequenceKeys(resource.faultSequence(), sequenceKeys);
                 }
                 addImplicitDefaultFaultSequenceKey(resource, sequenceKeys);
             }

@@ -51,6 +51,7 @@ public record Synapse() {
         // sequenceExists tells whether a given key names a known sequence, in whichever form the
         // caller has that knowledge available (converted metadata, or a raw artifact lookup).
         public boolean fallsBackToDefaultFaultSequence(Predicate<String> sequenceExists) {
+            assert sequenceExists != null : "sequenceExists must not be null";
             return faultSequenceKey.isBlank() ? faultSequence == null : !sequenceExists.test(faultSequenceKey);
         }
     }

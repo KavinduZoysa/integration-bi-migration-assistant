@@ -118,11 +118,13 @@ public class APIConverter implements BIRConverter<ConversionContext> {
             if (!fallsBackToDefault) {
                 wrapInFaultHandler(resourceContext, List.of(new SequenceMediator(faultSequenceKey)));
             } else {
-                wrapInGlobalDefaultFaultHandler(resourceContext, context);
-                reportUnresolvedFaultSequence(faultSequenceKey, resourceContext);
+                boolean usesProjectFaultSequence = wrapInGlobalDefaultFaultHandler(resourceContext, context);
+                reportUnresolvedFaultSequence(faultSequenceKey, resourceContext, usesProjectFaultSequence);
             }
         } else if (fallsBackToDefault) {
-            wrapInGlobalDefaultFaultHandler(resourceContext, context);
+            if (wrapInGlobalDefaultFaultHandler(resourceContext, context)) {
+                reportImplicitFaultSequence(resourceContext);
+            }
         } else if (resource.faultSequence().mediators().isEmpty()) {
             wrapInEmptyFaultHandler(resourceContext);
         } else {
@@ -176,13 +178,18 @@ public class APIConverter implements BIRConverter<ConversionContext> {
     }
 
     // Flags a faultSequence="X" attribute that names no known sequence with an inline TODO comment,
-    // so the fallback to the default handler is never silent.
-    private static void reportUnresolvedFaultSequence(String key, ResourceContext resourceContext) {
+    // so the fallback is never silent. usesProjectFaultSequence distinguishes what it actually falls
+    // back to: the project's "fault" sequence, or the hardcoded default handler.
+    private static void reportUnresolvedFaultSequence(String key, ResourceContext resourceContext,
+                                                        boolean usesProjectFaultSequence) {
         String file = resourceContext.shared().currentFile();
         String origin = file.isEmpty() ? "" : " (from " + file + ")";
         String snippet = "faultSequence=\"" + key + "\"";
+        String fallback = usesProjectFaultSequence
+                ? "falling back to the project-level '" + Synapse.DEFAULT_FAULT_SEQUENCE_KEY + "' sequence"
+                : "falling back to the default error handler";
         String detail = "Referenced fault sequence '" + key
-                + "' was not found among the converted artifacts; falling back to the default error handler.";
+                + "' was not found among the converted artifacts; " + fallback + ".";
         List<Statement> statements = resourceContext.statements();
         statements.add(statements.size() - 1, new Statement.Comment(
                 "TODO: Unresolved Synapse fault sequence reference '" + key + "'" + origin + ". " + detail));
@@ -191,24 +198,32 @@ public class APIConverter implements BIRConverter<ConversionContext> {
     }
 
     // Falls back to the project's "fault" sequence, if defined, else the hardcoded default. Reached for
-    // a resource with no faultSequence at all, and for an unresolved faultSequence="X" attribute.
-    private static void wrapInGlobalDefaultFaultHandler(ResourceContext resourceContext,
-                                                         ConversionContext context) {
-        if (context.sequenceMetadata(Synapse.DEFAULT_FAULT_SEQUENCE_KEY).isPresent()) {
-            reportImplicitFaultSequence(resourceContext);
+    // a resource with no faultSequence at all, and for an unresolved faultSequence="X" attribute. Returns
+    // whether the project's "fault" sequence was the one used, so callers can report accordingly.
+    private static boolean wrapInGlobalDefaultFaultHandler(ResourceContext resourceContext,
+                                                            ConversionContext context) {
+        boolean usesProjectFaultSequence = context.sequenceMetadata(Synapse.DEFAULT_FAULT_SEQUENCE_KEY).isPresent();
+        if (usesProjectFaultSequence) {
             wrapInFaultHandler(resourceContext, List.of(new SequenceMediator(Synapse.DEFAULT_FAULT_SEQUENCE_KEY)));
         } else {
             wrapInDefaultFaultHandler(resourceContext);
         }
+        return usesProjectFaultSequence;
     }
 
-    // Surfaces the implicit fallback to the project's "fault" sequence in the migration report
+    // Surfaces the implicit fallback to the project's "fault" sequence in the migration report, and flags
+    // it with an inline TODO comment, so the fallback is visible in the generated code too, not just the
+    // report. Only reached for a resource with no faultSequence of its own; an unresolved explicit
+    // faultSequence="X" is reported by reportUnresolvedFaultSequence instead.
     private static void reportImplicitFaultSequence(ResourceContext resourceContext) {
         String file = resourceContext.shared().currentFile();
         String detail = "This resource has no faultSequence of its own; because a project-level sequence "
                 + "named '" + Synapse.DEFAULT_FAULT_SEQUENCE_KEY + "' exists, it is used implicitly as this "
                 + "resource's error handler. Verify this matches the intended behavior, or rename the "
                 + "sequence if it is unrelated to error handling.";
+        List<Statement> statements = resourceContext.statements();
+        statements.add(statements.size() - 1, new Statement.Comment(
+                "TODO: Implicit Synapse fault sequence '" + Synapse.DEFAULT_FAULT_SEQUENCE_KEY + "'. " + detail));
         resourceContext.shared().reportUnsupported(
                 new UnsupportedEntry("Implicit fault sequence", "faultSequence", file, detail, ""));
     }

@@ -17,6 +17,8 @@
  */
 package synapse.expression;
 
+import java.util.Objects;
+
 /**
  * The parsed form of a Synapse expression. It is one of:
  * <ul>
@@ -61,5 +63,9 @@ public sealed interface SynapseExpression {
     // A get-property(...) call with no Ballerina mapping, e.g. get-property('axis2', 'HTTP_SC') or an
     // unrecognized property name.
     record UnsupportedCall(String raw) implements SynapseExpression {
+
+        public UnsupportedCall {
+            Objects.requireNonNull(raw, "raw");
+        }
     }
 }
