@@ -1,0 +1,32 @@
+openapi: 3.0.0
+info:
+  title: Orders API
+  version: v1
+  x-raml-mediaType: application/json
+servers:
+- url: http://localhost:8081/api
+paths:
+  /orders:
+    get:
+      summary: Retrieve an order by id
+      description: Retrieve an order by id
+      operationId: get_orders
+      parameters:
+      - name: id
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+              example: |-
+                {
+                  "id": "12345",
+                  "status": "CONFIRMED"
+                }
+components: {}

@@ -21,6 +21,7 @@ import common.BICodeConverter;
 import common.BallerinaModel;
 import common.CodeGenerator;
 import io.ballerina.compiler.syntax.tree.SyntaxTree;
+import io.swagger.v3.oas.models.OpenAPI;
 import mule.common.ContextBase;
 import mule.common.MigrationResult;
 import mule.common.MuleLogger;
@@ -30,6 +31,8 @@ import mule.common.ProjectMigrationResult;
 import mule.common.report.AggregateReportGenerator;
 import mule.common.report.IndividualReportGenerator;
 import mule.common.report.ProjectMigrationStats;
+import org.nipunaml.ramltoopenapi.RamlToOpenApiConverter;
+import org.nipunaml.ramltoopenapi.exception.ConverterException;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.BufferedReader;
@@ -46,6 +49,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -53,6 +57,7 @@ import java.util.stream.Collectors;
 import static common.BallerinaModel.Import;
 import static common.BallerinaModel.ModuleTypeDef;
 import static common.BallerinaModel.TextDocument;
+import static mule.MigratorUtils.collectRamlFiles;
 import static mule.MigratorUtils.collectXmlFiles;
 import static mule.MigratorUtils.collectYamlAndPropertyFiles;
 import static mule.MigratorUtils.createDirectories;
@@ -66,6 +71,10 @@ public class MuleMigrator {
     public static final String INTERNAL_TYPES_FILE_NAME = "internal_types.bal";
     public static final String MULE_V3_DEFAULT_XML_CONFIGS_DIR_NAME = "app";
     public static final String MULE_V4_DEFAULT_XML_CONFIGS_DIR_NAME = "mule";
+    public static final String RAML_FILE_EXTENSION = ".raml";
+    public static final String OPEN_API_SPECS_DIR_NAME = "api";
+    private static final String RAML_HEADER_PREFIX = "#%RAML";
+    private static final String RAML_SUPPORTED_VERSION = "1.0";
 
     public enum MuleVersion {
         MULE_V3(3), MULE_V4(4);
@@ -499,7 +508,76 @@ public class MuleMigrator {
 
         ContextBase ctx = getContext(version, xmlFiles, yamlFiles, muleXmlConfigDir, propertyFiles,
                 sourceProjectName, dryRun, keepStructure, logger, result, multiRootContext, munitXmlFiles);
+        convertRamlApiDefinitions(ctx, sourcePath);
         return ctx;
+    }
+
+    /**
+     * Converts the RAML API definitions of the project to OpenAPI, before the Mule XML configs are parsed. APIKit
+     * flows carry only the HTTP method and the resource path in their flow name, so the RAML definition is the only
+     * place the parameter and payload types of those flows are declared.
+     *
+     * @param ctx        context of the project being migrated
+     * @param sourcePath root directory of the Mule project
+     */
+    private static void convertRamlApiDefinitions(ContextBase ctx, Path sourcePath) {
+        List<File> ramlFiles = new ArrayList<>();
+        collectRamlFiles(sourcePath.resolve("src").resolve("main").toFile(), ramlFiles);
+        if (ramlFiles.isEmpty()) {
+            return;
+        }
+
+        ctx.logger.logState("Converting RAML API definitions to OpenAPI...");
+        RamlToOpenApiConverter converter = RamlToOpenApiConverter.create();
+        for (File ramlFile : ramlFiles) {
+            Optional<String> ramlVersion = readRamlRootVersion(ctx.logger, ramlFile);
+            if (ramlVersion.isEmpty()) {
+                ctx.logger.logInfo("Skipping RAML fragment, it is resolved through its root definition: " + ramlFile);
+                continue;
+            }
+            if (!RAML_SUPPORTED_VERSION.equals(ramlVersion.get())) {
+                ctx.logger.logSevere("Cannot convert '" + ramlFile + "': RAML " + ramlVersion.get() +
+                        " is not supported, only RAML " + RAML_SUPPORTED_VERSION + " can be converted to OpenAPI.");
+                continue;
+            }
+            try {
+                OpenAPI openApi = converter.convertToOpenApi(ramlFile);
+                ctx.openApiSpecs.put(relativizePath(sourcePath, ramlFile), openApi);
+                ctx.logger.logInfo("Converted RAML API definition to OpenAPI: " + ramlFile);
+            } catch (ConverterException e) {
+                ctx.logger.logSevere("Error converting RAML file " + ramlFile + ": " + e.getMessage());
+            }
+        }
+        ctx.logger.logInfo("Converted " + ctx.openApiSpecs.size() + " of " + ramlFiles.size() +
+                " RAML file(s) to OpenAPI.");
+    }
+
+    /**
+     * Reads the RAML version of a root API definition. A RAML file starts with a header such as {@code #%RAML 1.0};
+     * a trailing fragment type in that header (for example {@code #%RAML 1.0 DataType}) marks the file as a fragment
+     * that is included by a root definition rather than an API definition of its own.
+     *
+     * @param ramlFile the RAML file to inspect
+     * @return the RAML version, or empty if the file is not a root API definition
+     */
+    private static Optional<String> readRamlRootVersion(MuleLogger logger, File ramlFile) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(new FileInputStream(ramlFile), StandardCharsets.UTF_8))) {
+            String header = reader.readLine();
+            if (header == null || !header.stripLeading().startsWith(RAML_HEADER_PREFIX)) {
+                return Optional.empty();
+            }
+            String[] headerTokens = header.strip().split("\\s+");
+            return headerTokens.length == 2 ? Optional.of(headerTokens[1]) : Optional.empty();
+        } catch (IOException e) {
+            logger.logSevere("Error reading RAML file " + ramlFile + ": " + e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private static String relativizePath(Path sourcePath, File file) {
+        return sourcePath.toAbsolutePath().relativize(file.toPath().toAbsolutePath()).toString()
+                .replace(File.separatorChar, '/');
     }
 
     private static void convertMuleXmlFile(MuleLogger logger, ProjectMigrationResult result, String inputPathArg,
@@ -683,6 +761,7 @@ public class MuleMigrator {
         ctx.logger.logState("Generate project artifacts and bal files...");
         Map<String, String> allFiles = new HashMap<>();
         allFiles.putAll(genProjectArtifacts(ctx, ctx.logger));
+        allFiles.putAll(genOpenApiSpecFiles(ctx));
         allFiles.putAll(genBalFilesFromBir(ctx.logger, birTxtDocs));
         allFiles.putAll(genBalFilesFromBir(ctx.logger, testDocs));
         allFiles.putAll(genConfigTOMLFile(ctx.logger, ctx.yamlFiles, ctx.propertyFiles,
@@ -706,6 +785,27 @@ public class MuleMigrator {
         return createTextDocument(INTERNAL_TYPES_FILE_NAME, contextImports, contextTypeDefns,
                 Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
                 Collections.emptyList(), Collections.emptyList());
+    }
+
+    private static Map<String, String> genOpenApiSpecFiles(ContextBase ctx) {
+        if (ctx.openApiSpecs.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        ctx.logger.logState("Writing OpenAPI specifications converted from RAML...");
+        Map<String, String> specFiles = new HashMap<>();
+        for (Map.Entry<String, OpenAPI> spec : ctx.openApiSpecs.entrySet()) {
+            String ramlFileName = Path.of(spec.getKey()).getFileName().toString();
+            String specFilePath = OPEN_API_SPECS_DIR_NAME + "/"
+                    + ramlFileName.substring(0, ramlFileName.length() - RAML_FILE_EXTENSION.length()) + ".yaml";
+            if (specFiles.containsKey(specFilePath)) {
+                ctx.logger.logSevere("Not writing the OpenAPI specification of '" + spec.getKey() + "': '"
+                        + specFilePath + "' was already generated from another RAML file with the same name.");
+                continue;
+            }
+            specFiles.put(specFilePath, io.swagger.v3.core.util.Yaml.pretty(spec.getValue()));
+        }
+        return specFiles;
     }
 
     private static Map<String, String> genBalFilesFromBir(MuleLogger logger, List<TextDocument> birTxtDocs) {

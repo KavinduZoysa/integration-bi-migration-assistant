@@ -138,21 +138,13 @@ public class TestConverter {
             // Get relative paths for comparison, filtering relevant files
             var expectedPaths = expectedFiles
                     .filter(Files::isRegularFile)
-                    .filter(path -> {
-                        String fileName = path.getFileName().toString();
-                        return fileName.endsWith(".bal") || fileName.endsWith(".toml") ||
-                                fileName.equals("Config.toml");
-                    })
+                    .filter(TestConverter::isComparableGeneratedFile)
                     .map(expected::relativize)
                     .toList();
 
             var actualPaths = actualFiles
                     .filter(Files::isRegularFile)
-                    .filter(path -> {
-                        String fileName = path.getFileName().toString();
-                        return fileName.endsWith(".bal") || fileName.endsWith(".toml") ||
-                                fileName.equals("Config.toml");
-                    })
+                    .filter(TestConverter::isComparableGeneratedFile)
                     .map(actual::relativize)
                     .toList();
 
@@ -181,6 +173,11 @@ public class TestConverter {
                         "Extra file in actual directory: " + relativePath);
             }
         }
+    }
+
+    private static boolean isComparableGeneratedFile(Path path) {
+        String fileName = path.getFileName().toString();
+        return fileName.endsWith(".bal") || fileName.endsWith(".toml") || fileName.endsWith(".yaml");
     }
 
     private void compareFiles(Path actual, Path expected) throws IOException {

@@ -14,6 +14,16 @@ dependencies {
     implementation group: 'org.ballerinalang', name: 'formatter-core', version: "${ballerinaLangVersion}"
     implementation group: 'org.ballerinalang', name: 'ballerina-tools-api', version: "${ballerinaLangVersion}"
 
+    // RAML to OpenAPI conversion. The library exposes all of its dependencies as runtime-only, so the
+    // OpenAPI model and serializer types used in our own signatures are declared explicitly.
+    implementation(group: 'raml-to-openapi-converter', name: 'raml-to-openapi',
+            version: "${ramlToOpenApiVersion}") {
+        exclude group: 'ch.qos.logback'
+    }
+    implementation group: 'io.swagger.core.v3', name: 'swagger-models', version: "${swaggerVersion}"
+    implementation group: 'io.swagger.core.v3', name: 'swagger-core', version: "${swaggerVersion}"
+    runtimeOnly group: 'org.slf4j', name: 'slf4j-nop', version: "${slf4jVersion}"
+
     // misc
     implementation group: 'org.antlr', name: 'antlr4', version: "${antlrVersion}"
     implementation group: 'info.picocli', name: 'picocli', version: "${picocliVersion}"

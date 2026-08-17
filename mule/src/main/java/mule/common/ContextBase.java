@@ -18,6 +18,7 @@
 package mule.common;
 
 import common.BallerinaModel;
+import io.swagger.v3.oas.models.OpenAPI;
 import mule.MuleMigrator.MuleVersion;
 import org.jetbrains.annotations.NotNull;
 
@@ -25,7 +26,9 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static common.BallerinaModel.Import;
@@ -46,6 +49,13 @@ public abstract class ContextBase {
     public final ProjectMigrationResult result;
     protected final MultiRootContext multiRootContext;
     protected final List<File> munitXmlFiles;
+
+    /**
+     * OpenAPI specifications converted from the RAML API definitions of this Mule project, keyed by the RAML file
+     * path relative to the project root. APIKit flows are described by these specs, so this is the source of truth
+     * for the resource paths, parameters and payload types of an APIKit backed service.
+     */
+    public final Map<String, OpenAPI> openApiSpecs = new LinkedHashMap<>();
 
     protected ContextBase(List<File> xmlFiles, List<File> yamlFiles, Path muleAppDir, MuleVersion muleVersion,
                          List<File> propertyFiles, String sourceName, boolean dryRun, boolean keepStructure,

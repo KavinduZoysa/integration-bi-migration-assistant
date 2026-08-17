@@ -104,6 +104,19 @@ public class MigratorUtils {
         }
     }
 
+    public static void collectRamlFiles(File folder, List<File> ramlFiles) {
+        File[] files = folder.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    collectRamlFiles(file, ramlFiles);
+                } else if (file.getName().toLowerCase().endsWith(MuleMigrator.RAML_FILE_EXTENSION)) {
+                    ramlFiles.add(file);
+                }
+            }
+        }
+    }
+
     public static void collectYamlAndPropertyFiles(File folder, List<File> yamlFiles, List<File> propertiesFiles) {
         File[] files = folder.listFiles();
         if (files != null) {
