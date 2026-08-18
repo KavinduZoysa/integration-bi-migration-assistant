@@ -24,6 +24,7 @@ import org.w3c.dom.NodeList;
 import synapse.model.Synapse.Api;
 import synapse.model.Synapse.ClassMediator;
 import synapse.model.Synapse.FaultSequence;
+import synapse.model.Synapse.FaultSequenceRef;
 import synapse.model.Synapse.InSequence;
 import synapse.model.Synapse.PayloadFactory;
 import synapse.model.Synapse.Property;
@@ -150,17 +151,24 @@ public class SynapseModelGenerator {
             }
         }
 
+        // A faultSequence="X" attribute takes priority over an inline <faultSequence>, mirroring
+        // Synapse's own ResourceFactory#configureSequences: once the attribute is present, the inline
+        // element is never parsed into a mediator sequence at all.
+        boolean hasFaultSequenceKey = !faultSequenceKey.isBlank();
         InSequence inSequence = null;
         FaultSequence faultSequence = null;
         for (Element child : childElements(element)) {
             if (IN_SEQUENCE_TAG.equals(child.getTagName()) && inSequence == null) {
                 inSequence = readInSequence(child);
-            } else if (FAULT_SEQUENCE_TAG.equals(child.getTagName()) && faultSequence == null) {
+            } else if (!hasFaultSequenceKey && FAULT_SEQUENCE_TAG.equals(child.getTagName())
+                    && faultSequence == null) {
                 faultSequence = readFaultSequence(child);
             }
         }
 
-        return new Resource(methods, path, matchAnyPath, queryParams, inSequence, faultSequence, faultSequenceKey);
+        FaultSequenceRef faultSequenceRef = hasFaultSequenceKey ? new FaultSequenceRef.KeyRef(faultSequenceKey)
+                : faultSequence != null ? new FaultSequenceRef.Inline(faultSequence) : new FaultSequenceRef.None();
+        return new Resource(methods, path, matchAnyPath, queryParams, inSequence, faultSequenceRef);
     }
 
     private static Sequence readSequence(Element element) {

@@ -35,24 +35,41 @@ public record Synapse() {
 
     // matchAnyPath is set when the Synapse resource declares neither 'uri-template' nor 'url-mapping';
     // such a resource matches any path, converted to a Ballerina rest path parameter ([string... path]).
-    // faultSequenceKey is the resource's faultSequence="X" attribute (empty when absent): a named
-    // reference taking priority over the inline faultSequence element below.
     public record Resource(Kind kind, String methods, String path, boolean matchAnyPath,
                            List<String> queryParams, InSequence inSequence,
-                           FaultSequence faultSequence, String faultSequenceKey) implements SynapseNode {
+                           FaultSequenceRef faultSequenceRef) implements SynapseNode {
         public Resource(String methods, String path, boolean matchAnyPath, List<String> queryParams,
-                        InSequence inSequence, FaultSequence faultSequence, String faultSequenceKey) {
-            this(Kind.RESOURCE, methods, path, matchAnyPath, queryParams, inSequence, faultSequence,
-                    faultSequenceKey);
+                        InSequence inSequence, FaultSequenceRef faultSequenceRef) {
+            this(Kind.RESOURCE, methods, path, matchAnyPath, queryParams, inSequence, faultSequenceRef);
         }
 
-        // A faultSequenceKey naming no known sequence, or no faultSequenceKey and no inline
-        // faultSequence, means this resource falls back to the project's default "fault" sequence.
-        // sequenceExists tells whether a given key names a known sequence, in whichever form the
-        // caller has that knowledge available (converted metadata, or a raw artifact lookup).
+        // A KeyRef naming no known sequence, or no faultSequence at all (None), means this resource
+        // falls back to the project's default "fault" sequence. sequenceExists tells whether a given
+        // key names a known sequence, in whichever form the caller has that knowledge available.
         public boolean fallsBackToDefaultFaultSequence(Predicate<String> sequenceExists) {
             assert sequenceExists != null : "sequenceExists must not be null";
-            return faultSequenceKey.isBlank() ? faultSequence == null : !sequenceExists.test(faultSequenceKey);
+            return switch (faultSequenceRef) {
+                case FaultSequenceRef.KeyRef(String key) -> !sequenceExists.test(key);
+                case FaultSequenceRef.Inline ignored -> false;
+                case FaultSequenceRef.None ignored -> true;
+            };
+        }
+    }
+
+    // A resource's faultSequence attribute/inline element, resolved to a single reference at parse
+    // time: at most one of the two ever applies for a given resource, mirroring Synapse's own
+    // ResourceFactory#configureSequences.
+    public sealed interface FaultSequenceRef {
+        // <resource faultSequence="key"> -> a named reference to a sequence declared elsewhere.
+        record KeyRef(String key) implements FaultSequenceRef {
+        }
+
+        // <resource><faultSequence>...</faultSequence></resource> -> the inline sequence itself.
+        record Inline(FaultSequence sequence) implements FaultSequenceRef {
+        }
+
+        // Neither a faultSequence attribute nor an inline element was present.
+        record None() implements FaultSequenceRef {
         }
     }
 

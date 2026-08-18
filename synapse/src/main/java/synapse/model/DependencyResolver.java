@@ -20,6 +20,7 @@ package synapse.model;
 import synapse.model.DependencyGraph.ArtifactNode;
 import synapse.model.Synapse.Api;
 import synapse.model.Synapse.FaultSequence;
+import synapse.model.Synapse.FaultSequenceRef;
 import synapse.model.Synapse.InSequence;
 import synapse.model.Synapse.Kind;
 import synapse.model.Synapse.Resource;
@@ -103,11 +104,11 @@ public class DependencyResolver {
                 if (resource.inSequence() != null) {
                     collectSequenceKeys(resource.inSequence(), sequenceKeys);
                 }
-                String faultSequenceKey = resource.faultSequenceKey();
-                if (!faultSequenceKey.isBlank()) {
-                    sequenceKeys.add(faultSequenceKey);
-                } else if (resource.faultSequence() != null) {
-                    collectSequenceKeys(resource.faultSequence(), sequenceKeys);
+                switch (resource.faultSequenceRef()) {
+                    case FaultSequenceRef.KeyRef(String key) -> sequenceKeys.add(key);
+                    case FaultSequenceRef.Inline(FaultSequence faultSequence) ->
+                            collectSequenceKeys(faultSequence, sequenceKeys);
+                    case FaultSequenceRef.None ignored -> { }
                 }
                 addImplicitDefaultFaultSequenceKey(resource, sequenceKeys);
             }
@@ -124,10 +125,8 @@ public class DependencyResolver {
         }
     }
 
-    // A resource with no faultSequenceKey and no inline faultSequence, or one whose faultSequenceKey
-    // names no known sequence, implicitly depends on the project's "fault" sequence when one exists.
-    // sequenceKeys is a Set, so this is a no-op when "fault" was already collected some other way
-    // (e.g. an explicit <sequence key="fault"/> reference).
+    // A resource with no faultSequence at all, or a faultSequence key that names no known sequence,
+    // implicitly depends on the project's "fault" sequence when one exists.
     private void addImplicitDefaultFaultSequenceKey(Resource resource, Set<String> sequenceKeys) {
         Predicate<String> sequenceExists = sequencesByName::containsKey;
         if (resource.fallsBackToDefaultFaultSequence(sequenceExists)

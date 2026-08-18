@@ -31,6 +31,8 @@ import synapse.converter.ConversionContext.UnsupportedEntry;
 import synapse.converter.ResourceContext;
 import synapse.model.Synapse;
 import synapse.model.Synapse.Api;
+import synapse.model.Synapse.FaultSequence;
+import synapse.model.Synapse.FaultSequenceRef;
 import synapse.model.Synapse.SequenceMediator;
 import synapse.model.Synapse.SynapseNode;
 
@@ -107,28 +109,30 @@ public class APIConverter implements BIRConverter<ConversionContext> {
             MediatorConverters.convertMediators(resource.inSequence().mediators(), resourceContext);
         }
 
-        // faultSequence="X" takes priority over an inline <faultSequence>. An unresolved X is reported
-        // and falls back to the same default as no faultSequence at all. An explicit but empty
-        // <faultSequence/> is the author's deliberate choice to leave failures unhandled, so it gets an
-        // empty 'on fail'.
-        String faultSequenceKey = resource.faultSequenceKey();
-        boolean fallsBackToDefault =
-                resource.fallsBackToDefaultFaultSequence(key -> context.sequenceMetadata(key).isPresent());
-        if (!faultSequenceKey.isBlank()) {
-            if (!fallsBackToDefault) {
-                wrapInFaultHandler(resourceContext, List.of(new SequenceMediator(faultSequenceKey)));
-            } else {
-                boolean usesProjectFaultSequence = wrapInGlobalDefaultFaultHandler(resourceContext, context);
-                reportUnresolvedFaultSequence(faultSequenceKey, resourceContext, usesProjectFaultSequence);
+        // An unresolved key is reported and falls back to the same default as no faultSequence at all.
+        // An explicit but empty <faultSequence/> is the author's deliberate choice to leave failures
+        // unhandled, so it gets an empty 'on fail'.
+        switch (resource.faultSequenceRef()) {
+            case FaultSequenceRef.KeyRef(String key) -> {
+                if (context.sequenceMetadata(key).isPresent()) {
+                    wrapInFaultHandler(resourceContext, List.of(new SequenceMediator(key)));
+                } else {
+                    boolean usesProjectFaultSequence = wrapInGlobalDefaultFaultHandler(resourceContext, context);
+                    reportUnresolvedFaultSequence(key, resourceContext, usesProjectFaultSequence);
+                }
             }
-        } else if (fallsBackToDefault) {
-            if (wrapInGlobalDefaultFaultHandler(resourceContext, context)) {
-                reportImplicitFaultSequence(resourceContext);
+            case FaultSequenceRef.Inline(FaultSequence faultSequence) -> {
+                if (faultSequence.mediators().isEmpty()) {
+                    wrapInEmptyFaultHandler(resourceContext);
+                } else {
+                    wrapInFaultHandler(resourceContext, faultSequence.mediators());
+                }
             }
-        } else if (resource.faultSequence().mediators().isEmpty()) {
-            wrapInEmptyFaultHandler(resourceContext);
-        } else {
-            wrapInFaultHandler(resourceContext, resource.faultSequence().mediators());
+            case FaultSequenceRef.None ignored -> {
+                if (wrapInGlobalDefaultFaultHandler(resourceContext, context)) {
+                    reportImplicitFaultSequence(resourceContext);
+                }
+            }
         }
 
         context.addImports(ConversionContext.MAIN_BAL_FILE, resourceContext.importStatements());
