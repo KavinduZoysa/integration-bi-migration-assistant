@@ -377,11 +377,10 @@ public final class SynapseConverter {
     }
 
     // Guarded by ctx.responded so a resource's on-fail handler can unconditionally call respond() as a
-    // safety net: if the mediation that failed was itself a respond, the caller has already had a
-    // response attempted on it, and calling ->respond() again would error instead of the original
-    // failure being reported. ctx.responded is set before the actual respond attempt (not after it
-    // succeeds) so that an error from the attempt itself still marks it as attempted, rather than
-    // letting the safety net retry on the same caller and mask the original error.
+    // safety net: if the mediation that failed was itself a respond, calling ->respond() again would
+    // error instead of the original failure being reported. The flag is set right before the attempt,
+    // not after it succeeds, so a failed attempt still counts as attempted; the two statements are kept
+    // adjacent so no fallible code can land between them unnoticed.
     private static void addRespondFunction(ConversionContext context) {
         context.addImports(ConversionContext.FUNCTIONS_BAL_FILE, List.of(new Import("ballerina", "http")));
         context.addFunction(new Function(RESPOND_FUNCTION,
@@ -389,7 +388,6 @@ public final class SynapseConverter {
                 new BallerinaType(ERROR_OPTIONAL),
                 List.of(
                         new Statement.BallerinaStatement("if ctx.responded { return; }"),
-                        new Statement.BallerinaStatement("ctx.responded = true;"),
                         new Statement.BallerinaStatement("http:Response response = new;"),
                         new Statement.BallerinaStatement("response.setPayload(ctx.payload);"),
                         new Statement.BallerinaStatement(
@@ -397,6 +395,7 @@ public final class SynapseConverter {
                                         + " response.setHeader(name, value); }"),
                         new Statement.BallerinaStatement("int? statusCode = ctx.statusCode;"),
                         new Statement.BallerinaStatement("if statusCode is int { response.statusCode = statusCode; }"),
+                        new Statement.BallerinaStatement("ctx.responded = true;"),
                         new Statement.BallerinaStatement(
                                 "check (<http:Caller>ctx.caller)->respond(response);"))));
     }

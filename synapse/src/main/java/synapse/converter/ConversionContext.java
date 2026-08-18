@@ -24,6 +24,7 @@ import common.BallerinaModel.Service;
 import org.jetbrains.annotations.NotNull;
 import synapse.converter.bir.mediators.classmediator.source.JavaSourceResolver;
 import synapse.model.DependencyGraph;
+import synapse.model.Synapse;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -231,6 +232,23 @@ public class ConversionContext {
     @NotNull
     public Map<String, PropertyInfo> properties() {
         return properties;
+    }
+
+    // ERROR_MESSAGE is populated by Synapse itself on entry to fault handling, not by a <property>
+    // mediator reached during conversion, so it is always available regardless of artifact conversion
+    // order.
+    private static final Set<String> WELL_KNOWN_DEFAULT_SCOPE_PROPERTIES = Set.of(Synapse.ERROR_MESSAGE_PROPERTY);
+
+    /**
+     * Names of the default-scope properties a {@code get-property(...)} expression may resolve against:
+     * every property registered via {@link #addProperty} so far, plus the well-known properties Synapse
+     * itself populates regardless of conversion order.
+     */
+    @NotNull
+    public Set<String> availableDefaultScopeProperties() {
+        Set<String> available = new LinkedHashSet<>(properties.keySet());
+        available.addAll(WELL_KNOWN_DEFAULT_SCOPE_PROPERTIES);
+        return available;
     }
 
     /**

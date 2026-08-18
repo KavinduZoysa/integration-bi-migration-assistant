@@ -33,6 +33,7 @@ import synapse.model.Synapse.SynapseNode;
 import synapse.model.SynapseType;
 
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Converts a Synapse {@code <property>} mediator. How a property is converted
@@ -179,7 +180,9 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
     // the assignment and leaves the (optional) target unset.
     public static Optional<String> resolveExpression(String raw, boolean isLiteral, SynapseType expectedType,
                                                       ScopeContext context) {
-        return resolveExpression(SynapseExpressionParser.parse(raw, isLiteral), raw, expectedType, context);
+        Set<String> availableProperties = context.shared().availableDefaultScopeProperties();
+        return resolveExpression(SynapseExpressionParser.parse(raw, isLiteral, availableProperties), raw, expectedType,
+                context);
     }
 
     // Same as above, but for a caller that already parsed the raw expression to inspect its shape and
@@ -199,7 +202,8 @@ public class PropertyConverter implements BIRConverter<ScopeContext> {
     }
 
     private static ExpressionEval emitExpression(String raw, boolean isLiteral, ScopeContext context) {
-        return emitExpression(SynapseExpressionParser.parse(raw, isLiteral), raw, context);
+        Set<String> availableProperties = context.shared().availableDefaultScopeProperties();
+        return emitExpression(SynapseExpressionParser.parse(raw, isLiteral, availableProperties), raw, context);
     }
 
     private static ExpressionEval emitExpression(SynapseExpression parsed, String raw, ScopeContext context) {

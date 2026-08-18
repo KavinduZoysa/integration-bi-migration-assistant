@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
  * booleans, quoted strings) and scope/property/XPath references.
  *
  * <p>The forms overlap — an unquoted {@code before} is a valid relative XPath while {@code "before"}
- * is a string literal — so a fixed precedence disambiguates them: quoted string, then boolean, then
+ * is a string literal — so a fixed precedence disambiguate them: quoted string, then boolean, then
  * int, then float, then a {@code $}-prefixed scope reference, and finally a bare XPath rooted at the
  * payload. The XPath tail is never interpreted here; it is kept verbatim for the
  * {@code ballerina/data.xmldata} runtime engine.
@@ -53,19 +53,25 @@ public final class SynapseExpressionParser {
     // silently falling through to parseLiteral as a string.
     private static final Pattern GET_PROPERTY_PATTERN =
             Pattern.compile("get-property\\(\\s*['\"]([^'\"]*)['\"]\\s*\\)");
-    private static final Set<String> DEFAULT_SCOPE_PROPERTIES = Set.of("ERROR_MESSAGE");
 
     private SynapseExpressionParser() {
     }
 
+    /**
+     * @param availableProperties names of the default-scope Synapse properties known to be set
+     *                            (via a {@code <property>} mediator, a class mediator, or seeded by the
+     *                            converter itself, e.g. {@code ERROR_MESSAGE}) somewhere in the project
+     *                            being converted, so a {@code get-property(...)} call referencing one
+     *                            resolves to {@code $ctx:name} rather than an {@link UnsupportedCall}.
+     */
     @NotNull
-    public static SynapseExpression parse(String raw, boolean isLiteral) {
+    public static SynapseExpression parse(String raw, boolean isLiteral, Set<String> availableProperties) {
         String expression = raw.trim();
         if (isLiteral) {
             return parseLiteral(expression);
         }
 
-        return parseExpression(expression);
+        return parseExpression(expression, availableProperties);
     }
 
     private static Literal parseLiteral(String literal) {
@@ -103,7 +109,7 @@ public final class SynapseExpressionParser {
     }
 
     @NotNull
-    private static SynapseExpression parseExpression(String expression) {
+    private static SynapseExpression parseExpression(String expression, Set<String> availableProperties) {
         if (expression.isEmpty()) {
             // TODO: This should be handled to replicate the same behavior as Synapse.
             throw new IllegalArgumentException("Expression must not be empty");
@@ -114,7 +120,7 @@ public final class SynapseExpressionParser {
         }
 
         if (expression.startsWith("get-property(")) {
-            return parseGetProperty(expression);
+            return parseGetProperty(expression, availableProperties);
         }
 
         if (expression.charAt(0) == '$') {
@@ -146,11 +152,14 @@ public final class SynapseExpressionParser {
         return parseLiteral(expression);
     }
 
-    // e.g. get-property('ERROR_MESSAGE') -> $ctx:ERROR_MESSAGE; anything else -> UnsupportedCall.
+    // e.g. get-property('ERROR_MESSAGE') -> $ctx:ERROR_MESSAGE, provided ERROR_MESSAGE is actually
+    // available in ctx.variables (i.e. some <property> mediator, class mediator, or the converter
+    // itself set it as a default-scope property somewhere in the project); anything else, including a
+    // name not known to be set, becomes an UnsupportedCall instead of a reference that would not compile.
     @NotNull
-    private static SynapseExpression parseGetProperty(String expression) {
+    private static SynapseExpression parseGetProperty(String expression, Set<String> availableProperties) {
         Matcher matcher = GET_PROPERTY_PATTERN.matcher(expression);
-        if (matcher.matches() && DEFAULT_SCOPE_PROPERTIES.contains(matcher.group(1))) {
+        if (matcher.matches() && availableProperties.contains(matcher.group(1))) {
             return new PropertyExpression(DEFAULT_SCOPE, matcher.group(1));
         }
         return new UnsupportedCall(expression);

@@ -26,6 +26,12 @@ public record Synapse() {
     // back to implicitly, if one exists.
     public static final String DEFAULT_FAULT_SEQUENCE_KEY = "fault";
 
+    // The default-scope property Synapse itself populates with the caught error's message on entry to
+    // fault handling. Unlike a property set by a <property> mediator, it is always treated as an
+    // available default-scope property (see ConversionContext#availableDefaultScopeProperties) rather
+    // than only once discovered while converting a fault handler.
+    public static final String ERROR_MESSAGE_PROPERTY = "ERROR_MESSAGE";
+
     public record Api(Kind kind, String name, String context, List<SynapseNode> resources)
             implements SynapseNode {
         public Api(String name, String context, List<SynapseNode> resources) {

@@ -152,7 +152,8 @@ public class ClassMediatorConverter implements BIRConverter<ScopeContext> {
         if (!property.hasExpression() || property.expression().isBlank()) {
             return Optional.of(new StringConstant(property.value()));
         }
-        SynapseExpression parsed = SynapseExpressionParser.parse(property.expression(), false);
+        Set<String> availableProperties = context.shared().availableDefaultScopeProperties();
+        SynapseExpression parsed = SynapseExpressionParser.parse(property.expression(), false, availableProperties);
         if (parsed instanceof SynapseExpression.Literal || parsed instanceof SynapseExpression.UnsupportedCall) {
             PropertyConverter.reportUnsupported(property, context,
                     "The expression is not recognized by the property converter; manual conversion required.");

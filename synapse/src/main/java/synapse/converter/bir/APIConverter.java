@@ -73,7 +73,6 @@ public class APIConverter implements BIRConverter<ConversionContext> {
     private static final Import LOG_IMPORT = new Import("ballerina", "log");
     private static final String UNHANDLED_ERROR_LOG_MESSAGE = "Unhandled error in mediation";
     private static final int UNHANDLED_ERROR_STATUS_CODE = 500;
-    private static final String ERROR_MESSAGE_PROPERTY = "ERROR_MESSAGE";
 
     @Override
     public void convert(SynapseNode node, ConversionContext context) {
@@ -176,9 +175,9 @@ public class APIConverter implements BIRConverter<ConversionContext> {
     // Seeds ERROR_MESSAGE from the caught err so get-property('ERROR_MESSAGE') resolves even when the
     // faultSequence runs as a separately generated function with no lexical access to err.
     private static void seedErrorMessageProperty(ResourceContext resourceContext) {
-        resourceContext.shared().addProperty(ERROR_MESSAGE_PROPERTY, "string", "default");
+        resourceContext.shared().addProperty(Synapse.ERROR_MESSAGE_PROPERTY, "string", "default");
         resourceContext.statements().add(new Statement.BallerinaStatement(
-                "ctx.variables." + ERROR_MESSAGE_PROPERTY + " = " + FAULT_ERROR_VAR + ".message();"));
+                "ctx.variables." + Synapse.ERROR_MESSAGE_PROPERTY + " = " + FAULT_ERROR_VAR + ".message();"));
     }
 
     // Flags a faultSequence="X" attribute that names no known sequence with an inline TODO comment,
