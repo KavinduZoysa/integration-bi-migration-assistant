@@ -150,7 +150,7 @@ public class SynapseExpressionTest {
     public Object[][] unsupportedCases() {
         return new Object[][] {
                 { "$query:q" }, // scope with no ctx target
-                { "get-property('ERROR_MESSAGE')" }, // no <property> mediator ever set it in this project
+                { "get-property('axis2', 'HTTP_SC')" }, // two-argument explicit-scope form is unsupported
         };
     }
 

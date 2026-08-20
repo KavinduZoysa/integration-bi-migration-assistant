@@ -10,9 +10,6 @@ function foo(Context ctx) returns error? {
 }
 
 function respond(Context ctx) returns error? {
-    if ctx.responded {
-        return;
-    }
     http:Response response = new;
     response.setPayload(ctx.payload);
     foreach [string, string] [name, value] in ctx.headers.entries() {
@@ -22,7 +19,6 @@ function respond(Context ctx) returns error? {
     if statusCode is int {
         response.statusCode = statusCode;
     }
-    ctx.responded = true;
     check (<http:Caller>ctx.caller)->respond(response);
 }
 

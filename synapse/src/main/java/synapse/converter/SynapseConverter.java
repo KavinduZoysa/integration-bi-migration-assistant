@@ -18,7 +18,6 @@
 
 package synapse.converter;
 
-import common.BallerinaModel.Expression.BooleanConstant;
 import common.BallerinaModel.Expression.MappingConstructor;
 import common.BallerinaModel.Expression.NilConstant;
 import common.BallerinaModel.Function;
@@ -101,7 +100,6 @@ public final class SynapseConverter {
     private static final String AXIS2_FIELD = "axis2";
     private static final String STATUS_CODE_FIELD = "statusCode";
     private static final String CALLER_FIELD = "caller";
-    private static final String RESPONDED_FIELD = "responded";
     private static final String REQUEST_PARAM = "request";
     private static final String RESPOND_FUNCTION = "respond";
     private static final String EMIT_PAYLOAD_FUNCTION = "emitPayload";
@@ -372,22 +370,15 @@ public final class SynapseConverter {
                 new RecordField(AXIS2_FIELD, new MapTypeDesc(BuiltinType.ANYDATA),
                         new MappingConstructor(List.of())),
                 new RecordField(STATUS_CODE_FIELD, BuiltinType.INT, true),
-                new RecordField(CALLER_FIELD, new BallerinaType(HTTP_CALLER), true),
-                new RecordField(RESPONDED_FIELD, BuiltinType.BOOLEAN, new BooleanConstant(false))))));
+                new RecordField(CALLER_FIELD, new BallerinaType(HTTP_CALLER), true)))));
     }
 
-    // Guarded by ctx.responded so a resource's on-fail handler can unconditionally call respond() as a
-    // safety net: if the mediation that failed was itself a respond, calling ->respond() again would
-    // error instead of the original failure being reported. The flag is set right before the attempt,
-    // not after it succeeds, so a failed attempt still counts as attempted; the two statements are kept
-    // adjacent so no fallible code can land between them unnoticed.
     private static void addRespondFunction(ConversionContext context) {
         context.addImports(ConversionContext.FUNCTIONS_BAL_FILE, List.of(new Import("ballerina", "http")));
         context.addFunction(new Function(RESPOND_FUNCTION,
                 List.of(new Parameter("ctx", new BallerinaType(CONTEXT_TYPE))),
                 new BallerinaType(ERROR_OPTIONAL),
                 List.of(
-                        new Statement.BallerinaStatement("if ctx.responded { return; }"),
                         new Statement.BallerinaStatement("http:Response response = new;"),
                         new Statement.BallerinaStatement("response.setPayload(ctx.payload);"),
                         new Statement.BallerinaStatement(
@@ -395,7 +386,6 @@ public final class SynapseConverter {
                                         + " response.setHeader(name, value); }"),
                         new Statement.BallerinaStatement("int? statusCode = ctx.statusCode;"),
                         new Statement.BallerinaStatement("if statusCode is int { response.statusCode = statusCode; }"),
-                        new Statement.BallerinaStatement("ctx.responded = true;"),
                         new Statement.BallerinaStatement(
                                 "check (<http:Caller>ctx.caller)->respond(response);"))));
     }

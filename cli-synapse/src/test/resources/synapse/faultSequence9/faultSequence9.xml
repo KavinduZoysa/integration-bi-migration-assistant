@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api xmlns="http://ws.apache.org/ns/synapse" name="FaultDemoAPI" context="/faultdemo">
+    <resource methods="POST" uri-template="/test">
+        <inSequence>
+            <property name="qtyRaw" scope="default" type="STRING" expression="//quantity"/>
+            <payloadFactory media-type="json" template-type="default">
+                <format>{"Hello":"World"}</format>
+            </payloadFactory>
+            <property name="qty" scope="default" type="INTEGER" expression="$ctx:qtyRaw"/>
+            <respond/>
+        </inSequence>
+        <faultSequence>
+            <property name="msg" scope="default" expression="get-property('ERROR_MESSAGE')"/>
+            <payloadFactory media-type="json" template-type="default">
+                <format>{"status":"error"}</format>
+            </payloadFactory>
+            <property name="HTTP_SC" value="500" scope="axis2"/>
+            <respond/>
+        </faultSequence>
+    </resource>
+</api>

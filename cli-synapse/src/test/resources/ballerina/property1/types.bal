@@ -14,5 +14,4 @@ public type Context record {|
     map<anydata> axis2 = {};
     int statusCode?;
     http:Caller caller?;
-    boolean responded = false;
 |};

@@ -153,9 +153,8 @@ public final class SynapseExpressionParser {
     }
 
     // e.g. get-property('ERROR_MESSAGE') -> $ctx:ERROR_MESSAGE, provided ERROR_MESSAGE is actually
-    // available in ctx.variables (i.e. some <property> mediator, class mediator, or the converter
-    // itself set it as a default-scope property somewhere in the project); anything else, including a
-    // name not known to be set, becomes an UnsupportedCall instead of a reference that would not compile.
+    // available in ctx.variables; anything else, including a name not known to be set, becomes an
+    // UnsupportedCall instead of a reference that would not compile.
     @NotNull
     private static SynapseExpression parseGetProperty(String expression, Set<String> availableProperties) {
         Matcher matcher = GET_PROPERTY_PATTERN.matcher(expression);
