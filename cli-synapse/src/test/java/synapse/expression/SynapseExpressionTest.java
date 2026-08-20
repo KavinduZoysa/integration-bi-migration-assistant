@@ -23,6 +23,8 @@ import synapse.expression.SynapseExpression.Literal;
 import synapse.expression.SynapseExpressionEmitter.ExpressionEval;
 import synapse.model.SynapseType;
 
+import java.util.Set;
+
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
@@ -99,14 +101,14 @@ public class SynapseExpressionTest {
      */
     @Test(dataProvider = "literalKindCases")
     public void parsesLiteralKindFromContent(String expression, Literal.Kind expectedKind) {
-        SynapseExpression parsed = SynapseExpressionParser.parse(expression, true);
+        SynapseExpression parsed = SynapseExpressionParser.parse(expression, true, Set.of());
         assertTrue(parsed instanceof Literal, "'" + expression + "' should parse as a literal");
         assertEquals(((Literal) parsed).kind(), expectedKind);
     }
 
     @Test(dataProvider = "literalKindCases")
     public void emittedLiteralCarriesType(String expression, Literal.Kind expectedKind) {
-        SynapseExpression parsed = SynapseExpressionParser.parse(expression, true);
+        SynapseExpression parsed = SynapseExpressionParser.parse(expression, true, Set.of());
         ExpressionEval result = SynapseExpressionEmitter.emit(parsed, expression);
         assertEquals(result.literalType(), java.util.Optional.of(toSynapseType(expectedKind)));
     }
@@ -148,10 +150,26 @@ public class SynapseExpressionTest {
     public Object[][] unsupportedCases() {
         return new Object[][] {
                 { "$query:q" }, // scope with no ctx target
+                { "get-property('axis2', 'HTTP_SC')" }, // two-argument explicit-scope form is unsupported
         };
     }
 
+    /**
+     * A {@code get-property(...)} call only resolves to {@code $ctx:name} when {@code name} is known to
+     * have been set as a default-scope property somewhere in the project (see
+     * {@link SynapseExpressionParser#parse}); otherwise it degrades to a placeholder like any other
+     * unsupported construct, exercised via {@link #unsupportedCases}.
+     */
+    @Test
+    public void getPropertyResolvesWhenAvailable() {
+        String expression = "get-property('ERROR_MESSAGE')";
+        SynapseExpression parsed = SynapseExpressionParser.parse(expression, false, Set.of("ERROR_MESSAGE"));
+        ExpressionEval result = SynapseExpressionEmitter.emit(parsed, expression);
+        assertEquals(result.value().toString(), "ctx.variables.ERROR_MESSAGE");
+        assertFalse(result.warning().isPresent());
+    }
+
     private static ExpressionEval emit(String expression) {
-        return SynapseExpressionEmitter.emit(SynapseExpressionParser.parse(expression, false), expression);
+        return SynapseExpressionEmitter.emit(SynapseExpressionParser.parse(expression, false, Set.of()), expression);
     }
 }

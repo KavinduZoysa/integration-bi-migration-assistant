@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api context="/DefaultFaultSequence1" name="DefaultFaultSequence1" xmlns="http://ws.apache.org/ns/synapse">
+    <resource methods="GET" uri-template="/status">
+        <inSequence>
+            <payloadFactory media-type="json" template-type="default">
+                <format>{"Hello":"World"}</format>
+            </payloadFactory>
+            <respond/>
+        </inSequence>
+    </resource>
+</api>

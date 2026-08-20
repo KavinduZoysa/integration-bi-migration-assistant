@@ -12,6 +12,7 @@ The integrator-bi-migration-assistant is a comprehensive tool designed to conver
 
 - **Mule**: Located in the `mule/` directory - converts [MuleSoft](https://www.mulesoft.com) configurations to Ballerina
 - **Tibco**: Located in the `tibco/` directory - converts [TIBCO BusinessWorks](https://docs.tibco.com/products/tibco-activematrix-businessworks) configurations to Ballerina
+- **Synapse**: Located in the `synapse/` directory - converts [WSO2 Synapse](https://synapse.apache.org) (ESB / Micro Integrator) configurations to Ballerina. Early scaffold — see [synapse/README.md](synapse/README.md) for current coverage.
 
 Each package contains its own documentation, samples, and migration tools specific to the respective integration platform.
 
@@ -87,3 +88,4 @@ This will generate:
 For detailed information about each migration assistant, please refer to:
 - [Mule Migration Assistant](mule/README.md)
 - [Tibco Migration Assistant](tibco/README.md)
+- [Synapse Migration Assistant](synapse/README.md)

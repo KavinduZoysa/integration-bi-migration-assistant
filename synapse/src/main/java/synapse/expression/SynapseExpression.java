@@ -17,6 +17,8 @@
  */
 package synapse.expression;
 
+import java.util.Objects;
+
 /**
  * The parsed form of a Synapse expression. It is one of:
  * <ul>
@@ -56,5 +58,14 @@ public sealed interface SynapseExpression {
     // An XPath evaluated against a scope or a property within it. An empty propertyName means the
     // XPath applies to the scope root itself, as in the payload-rooted bare XPath //items.
     record XPathExpression(String scope, String propertyName, String xpath) implements SynapseExpression {
+    }
+
+    // A get-property(...) call with no Ballerina mapping, e.g. get-property('axis2', 'HTTP_SC') or an
+    // unrecognized property name.
+    record UnsupportedCall(String raw) implements SynapseExpression {
+
+        public UnsupportedCall {
+            Objects.requireNonNull(raw, "raw");
+        }
     }
 }

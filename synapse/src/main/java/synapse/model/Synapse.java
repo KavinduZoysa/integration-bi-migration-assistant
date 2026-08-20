@@ -18,8 +18,19 @@
 package synapse.model;
 
 import java.util.List;
+import java.util.function.Predicate;
 
 public record Synapse() {
+
+    // The conventional project-level sequence name a resource with no faultSequence of its own falls
+    // back to implicitly, if one exists.
+    public static final String DEFAULT_FAULT_SEQUENCE_KEY = "fault";
+
+    // The default-scope property Synapse itself populates with the caught error's message on entry to
+    // fault handling. Unlike a property set by a <property> mediator, it is always treated as an
+    // available default-scope property (see ConversionContext#availableDefaultScopeProperties) rather
+    // than only once discovered while converting a fault handler.
+    public static final String ERROR_MESSAGE_PROPERTY = "ERROR_MESSAGE";
 
     public record Api(Kind kind, String name, String context, List<SynapseNode> resources)
             implements SynapseNode {
@@ -31,10 +42,40 @@ public record Synapse() {
     // matchAnyPath is set when the Synapse resource declares neither 'uri-template' nor 'url-mapping';
     // such a resource matches any path, converted to a Ballerina rest path parameter ([string... path]).
     public record Resource(Kind kind, String methods, String path, boolean matchAnyPath,
-                           List<String> queryParams, InSequence inSequence) implements SynapseNode {
+                           List<String> queryParams, InSequence inSequence,
+                           FaultSequenceRef faultSequenceRef) implements SynapseNode {
         public Resource(String methods, String path, boolean matchAnyPath, List<String> queryParams,
-                        InSequence inSequence) {
-            this(Kind.RESOURCE, methods, path, matchAnyPath, queryParams, inSequence);
+                        InSequence inSequence, FaultSequenceRef faultSequenceRef) {
+            this(Kind.RESOURCE, methods, path, matchAnyPath, queryParams, inSequence, faultSequenceRef);
+        }
+
+        // A KeyRef naming no known sequence, or no faultSequence at all (None), means this resource
+        // falls back to the project's default "fault" sequence. sequenceExists tells whether a given
+        // key names a known sequence, in whichever form the caller has that knowledge available.
+        public boolean fallsBackToDefaultFaultSequence(Predicate<String> sequenceExists) {
+            assert sequenceExists != null : "sequenceExists must not be null";
+            return switch (faultSequenceRef) {
+                case FaultSequenceRef.KeyRef(String key) -> !sequenceExists.test(key);
+                case FaultSequenceRef.Inline ignored -> false;
+                case FaultSequenceRef.None ignored -> true;
+            };
+        }
+    }
+
+    // A resource's faultSequence attribute/inline element, resolved to a single reference at parse
+    // time: at most one of the two ever applies for a given resource, mirroring Synapse's own
+    // ResourceFactory#configureSequences.
+    public sealed interface FaultSequenceRef {
+        // <resource faultSequence="key"> -> a named reference to a sequence declared elsewhere.
+        record KeyRef(String key) implements FaultSequenceRef {
+        }
+
+        // <resource><faultSequence>...</faultSequence></resource> -> the inline sequence itself.
+        record Inline(FaultSequence sequence) implements FaultSequenceRef {
+        }
+
+        // Neither a faultSequence attribute nor an inline element was present.
+        record None() implements FaultSequenceRef {
         }
     }
 
@@ -42,6 +83,14 @@ public record Synapse() {
     public record InSequence(Kind kind, List<SynapseNode> mediators) implements SynapseNode {
         public InSequence(List<SynapseNode> mediators) {
             this(Kind.IN_SEQUENCE, mediators);
+        }
+    }
+
+    // <faultSequence> ... </faultSequence> -> the error-handling mediator sequence of a resource, run
+    // when mediating its inSequence fails. Converted to a Ballerina 'on fail' clause.
+    public record FaultSequence(Kind kind, List<SynapseNode> mediators) implements SynapseNode {
+        public FaultSequence(List<SynapseNode> mediators) {
+            this(Kind.FAULT_SEQUENCE, mediators);
         }
     }
 
@@ -134,6 +183,7 @@ public record Synapse() {
         API,
         RESOURCE,
         IN_SEQUENCE,
+        FAULT_SEQUENCE,
         SEQUENCE,
         PAYLOAD_FACTORY,
         RESPOND,

@@ -1,0 +1,13 @@
+# Synapse to Ballerina migration report
+
+1 Synapse construct could not be automatically converted and was left as TODOs in the generated code. Each entry shows the source file and the original Synapse code; review and migrate them manually.
+
+## Unresolved fault sequence (1)
+
+### `<faultSequence>` — api.xml
+
+Referenced fault sequence 'missingFault' was not found among the converted artifacts; falling back to the project-level 'fault' sequence.
+
+```xml
+faultSequence="missingFault"
+```

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api context="/FaultSequence1" name="FaultSequence1" xmlns="http://ws.apache.org/ns/synapse">
+    <resource methods="GET" uri-template="/status">
+        <inSequence>
+            <payloadFactory media-type="json" template-type="default">
+                <format>{"Hello":"World"}</format>
+            </payloadFactory>
+            <respond/>
+        </inSequence>
+        <faultSequence>
+            <property name="msg" scope="default" expression="get-property('ERROR_MESSAGE')"/>
+            <payloadFactory media-type="json" template-type="default">
+                <format>{"error":"failed"}</format>
+            </payloadFactory>
+            <respond/>
+        </faultSequence>
+    </resource>
+</api>

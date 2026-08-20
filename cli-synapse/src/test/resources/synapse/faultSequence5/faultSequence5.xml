@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api context="/NamedFaultSequenceUnresolved1" name="NamedFaultSequenceUnresolved1"
+     xmlns="http://ws.apache.org/ns/synapse">
+    <resource methods="GET" uri-template="/status" faultSequence="missingFault">
+        <inSequence>
+            <payloadFactory media-type="json" template-type="default">
+                <format>{"Hello":"World"}</format>
+            </payloadFactory>
+            <sequence key="helper"/>
+            <respond/>
+        </inSequence>
+    </resource>
+</api>

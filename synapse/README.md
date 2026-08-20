@@ -58,6 +58,7 @@ The migration tool currently supports the following Synapse elements:
 | `<payloadFactory>` | response payload |
 | `<respond>` | response return |
 | `<property>` (static name only) | response header, status code, or local variable |
+| `<faultSequence>` (inline or resolved `key="…"` reference to a project-level sequence) | `on fail` clause of a `do` block wrapping the resource body |
 
 ## Unsupported constructs (TODOs)
 
@@ -121,6 +122,8 @@ a case, drop `synapse/<Name>/<Name>.xml` and the expected `ballerina/<Name>` pac
 
 - `<proxy>` services, `<log>`, `<filter>` and other mediators/artifacts are not converted, but they no
   longer fail the migration: they are surfaced as TODOs (see [Unsupported constructs](#unsupported-constructs-todos)).
-- `<faultSequence>` / `<outSequence>` (error and out flows) are not yet migrated.
+- `<outSequence>` (the out flow) is not yet migrated. `<faultSequence>` (the error flow) is now
+  supported — an unresolved `key="…"` reference or a resource with no fault sequence at all falls back
+  to the project-level default and is reported if unresolved.
 - The response payload is set with a generic setter rather than media-type-specific ones (e.g. JSON/text/XML setters).
 - The HTTP listener is fixed (port `8080`) and is not derived from the source artifact.
