@@ -41,6 +41,7 @@ import synapse.converter.ConversionContext.PropertyInfo;
 import synapse.converter.ConversionContext.UnsupportedEntry;
 import synapse.converter.bir.APIConverter;
 import synapse.converter.bir.BIRConverter;
+import synapse.converter.bir.InboundEndpointConverter;
 import synapse.converter.bir.SequenceConverter;
 import synapse.converter.bir.mediators.classmediator.source.CfrDecompiler;
 import synapse.converter.bir.mediators.classmediator.source.Decompiler;
@@ -85,7 +86,8 @@ public final class SynapseConverter {
 
     private static final Map<Kind, BIRConverter<ConversionContext>> ROOT_CONVERTERS = Map.of(
             Kind.API, new APIConverter(),
-            Kind.SEQUENCE, new SequenceConverter());
+            Kind.SEQUENCE, new SequenceConverter(),
+            Kind.INBOUND_ENDPOINT, new InboundEndpointConverter());
 
     private static final String LISTENER_NAME = "httpListener";
     private static final String DEFAULT_PORT = "8080";
@@ -420,10 +422,17 @@ public final class SynapseConverter {
     private static void writeArtifacts(Path targetDir, ConversionContext context,
                                        Map<Path, Set<Import>> writtenImports) throws IOException {
         context.addImports(ConversionContext.MAIN_BAL_FILE, List.of(new Import("ballerina", "http")));
-        writeToFile(targetDir.resolve(ConversionContext.MAIN_BAL_FILE),
-                context.importsFor(ConversionContext.MAIN_BAL_FILE),
-                List.of(new HTTPListener(LISTENER_NAME, DEFAULT_PORT, DEFAULT_HOST)),
-                context.services(), List.of(), List.of(), writtenImports);
+        Path mainBalFile = targetDir.resolve(ConversionContext.MAIN_BAL_FILE);
+        List<Listener> listeners = new ArrayList<>();
+        if (!Files.exists(mainBalFile)) {
+            // The shared HTTP listener every <api> service binds to is declared once, the first time
+            // main.bal is written; an <inboundEndpoint>'s own dedicated listener (context.listeners())
+            // is per-artifact output instead, so it is appended on whichever round actually introduces it.
+            listeners.add(new HTTPListener(LISTENER_NAME, DEFAULT_PORT, DEFAULT_HOST));
+        }
+        listeners.addAll(context.listeners());
+        writeToFile(mainBalFile, context.importsFor(ConversionContext.MAIN_BAL_FILE),
+                listeners, context.services(), List.of(), List.of(), writtenImports);
         if (!context.functions().isEmpty()) {
             writeToFile(targetDir.resolve(ConversionContext.FUNCTIONS_BAL_FILE),
                     context.importsFor(ConversionContext.FUNCTIONS_BAL_FILE), List.of(),
@@ -448,11 +457,11 @@ public final class SynapseConverter {
                                          List<Function> functions, List<ModuleTypeDef> records)
             throws IOException {
         boolean exists = Files.exists(file);
-        if (exists && services.isEmpty() && functions.isEmpty() && records.isEmpty()) {
+        if (exists && listeners.isEmpty() && services.isEmpty() && functions.isEmpty() && records.isEmpty()) {
             return;
         }
         TextDocument document = new TextDocument(file.getFileName().toString(),
-                List.of(), records, List.of(), exists ? List.of() : listeners,
+                List.of(), records, List.of(), listeners,
                 services, functions, List.of(), List.of(), List.of());
         String source = document.toSource();
         if (exists) {

@@ -22,6 +22,7 @@ import synapse.model.Synapse.Api;
 import synapse.model.Synapse.FaultSequence;
 import synapse.model.Synapse.FaultSequenceRef;
 import synapse.model.Synapse.InSequence;
+import synapse.model.Synapse.InboundEndpoint;
 import synapse.model.Synapse.Kind;
 import synapse.model.Synapse.Resource;
 import synapse.model.Synapse.Sequence;
@@ -93,6 +94,8 @@ public class DependencyResolver {
             case Api api -> artifact.kind() == Kind.API && api.name().equals(artifact.name());
             case Sequence sequence -> artifact.kind() == Kind.SEQUENCE
                     && sequence.name().equals(artifact.name());
+            case InboundEndpoint inboundEndpoint -> artifact.kind() == Kind.INBOUND_ENDPOINT
+                    && inboundEndpoint.name().equals(artifact.name());
             default -> false;
         };
     }
@@ -119,6 +122,19 @@ public class DependencyResolver {
             case Sequence sequence ->
                     sequence.mediators().forEach(mediator -> collectSequenceKeys(mediator, sequenceKeys));
             case SequenceMediator sequenceMediator -> sequenceKeys.add(sequenceMediator.key());
+            case InboundEndpoint inboundEndpoint -> {
+                sequenceKeys.add(inboundEndpoint.sequenceKey());
+                if (inboundEndpoint.onErrorRef() instanceof FaultSequenceRef.KeyRef(String key)) {
+                    sequenceKeys.add(key);
+                } else if (inboundEndpoint.onErrorRef() instanceof FaultSequenceRef.None
+                        && sequencesByName.containsKey(Synapse.DEFAULT_FAULT_SEQUENCE_KEY)) {
+                    // Unlike Resource, an unresolved onError="X" does NOT fall back to the default fault
+                    // sequence in real Synapse - it throws (ContinuationStackManager#pushRootFaultHandler
+                    // ForSequence calls handleException instead of falling through). Only "no onError at
+                    // all" gets the implicit dependency here.
+                    sequenceKeys.add(Synapse.DEFAULT_FAULT_SEQUENCE_KEY);
+                }
+            }
             case Unsupported unsupported ->
                     unsupported.children().forEach(child -> collectSequenceKeys(child, sequenceKeys));
             default -> { }

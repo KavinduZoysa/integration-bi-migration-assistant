@@ -50,6 +50,7 @@ The migration tool currently supports the following Synapse elements:
 | `<api>` | HTTP service |
 | `<resource>` | resource function |
 | `<inSequence>` | resource function body |
+| `<inboundEndpoint>` (`protocol="http"`/`"https"`) | dedicated `http:Listener` (port from the `inbound.http.port` parameter) plus a wildcard service forwarding every request to the referenced `sequence` |
 
 ### Mediators
 
@@ -72,6 +73,11 @@ translation is surfaced as a TODO so the generated package still builds around t
   applied — the TODO flags that it needs manual restructuring).
 - **Unsupported top-level artifacts** (e.g. `<proxy>`, `<endpoint>`) are reported in
   `migration_report.md` (they have no Ballerina construct to host an inline comment).
+- **`<inboundEndpoint>` protocols other than `http`/`https`** (e.g. `jms`, `file`, `ws`, a `class=…`
+  custom Java endpoint) have no generated listener equivalent yet and are reported in
+  `migration_report.md` the same way an unsupported top-level artifact is. An `inboundEndpoint`
+  parameter other than `inbound.http.port`/`inbound.http.host` is likewise reported rather than
+  silently ignored.
 - **Unsupported `<property>` scopes / `remove` actions** and **unresolved `<sequence key="…"/>`
   references** become inline `// TODO` comments and are recorded in the report.
 
@@ -126,4 +132,6 @@ a case, drop `synapse/<Name>/<Name>.xml` and the expected `ballerina/<Name>` pac
   supported — an unresolved `key="…"` reference or a resource with no fault sequence at all falls back
   to the project-level default and is reported if unresolved.
 - The response payload is set with a generic setter rather than media-type-specific ones (e.g. JSON/text/XML setters).
-- The HTTP listener is fixed (port `8080`) and is not derived from the source artifact.
+- The shared HTTP listener every `<api>` service binds to is fixed (port `8080`) and is not derived
+  from the source artifact. An `<inboundEndpoint>` is the exception: it gets its own dedicated
+  `http:Listener`, with the port read from its `inbound.http.port` parameter.

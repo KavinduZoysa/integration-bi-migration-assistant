@@ -19,6 +19,7 @@ package synapse.converter;
 
 import common.BallerinaModel.Function;
 import common.BallerinaModel.Import;
+import common.BallerinaModel.Listener;
 import common.BallerinaModel.ModuleTypeDef;
 import common.BallerinaModel.Service;
 import org.jetbrains.annotations.NotNull;
@@ -63,6 +64,7 @@ public class ConversionContext {
     private final List<Service> services = new ArrayList<>();
     private final List<Function> functions = new ArrayList<>();
     private final List<ModuleTypeDef> records = new ArrayList<>();
+    private final List<Listener> listeners = new ArrayList<>();
 
     private final Map<String, SequenceMetadata> sequenceMetadata = new HashMap<>();
     private final Map<String, Set<Import>> importsByFile = new HashMap<>();
@@ -128,6 +130,20 @@ public class ConversionContext {
 
     public List<Service> services() {
         return services;
+    }
+
+    /**
+     * Registers a listener dedicated to the artifact currently being converted (e.g. the transport-level
+     * entry point an {@code <inboundEndpoint>} opens), as opposed to the single shared HTTP listener
+     * every {@code <api>} service binds to. Per-artifact output, like {@link #services()}: cleared by
+     * {@link #clearArtifactOutput()} once flushed.
+     */
+    public void addListener(Listener listener) {
+        listeners.add(listener);
+    }
+
+    public List<Listener> listeners() {
+        return listeners;
     }
 
     public void addFunction(Function function) {
@@ -272,6 +288,7 @@ public class ConversionContext {
         services.clear();
         functions.clear();
         records.clear();
+        listeners.clear();
     }
 
     // Facts about a <sequence>, recorded once it has been converted, all falling out of the conversion

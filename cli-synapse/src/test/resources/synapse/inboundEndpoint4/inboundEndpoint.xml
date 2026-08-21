@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inboundEndpoint name="JmsInbound" sequence="foo" protocol="jms" suspend="false"
+                 xmlns="http://ws.apache.org/ns/synapse">
+    <parameters>
+        <parameter name="java.naming.factory.initial">org.apache.activemq.jndi.ActiveMQInitialContextFactory</parameter>
+    </parameters>
+</inboundEndpoint>

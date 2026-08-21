@@ -175,6 +175,25 @@ public record Synapse() {
         }
     }
 
+    // <inboundEndpoint name=".." sequence=".." onError=".." protocol=".." class=".." suspend="..">
+    //   <parameters><parameter name="inbound.http.port">8085</parameter>...</parameters>
+    // </inboundEndpoint>
+    // -> a transport-level entry point that forwards every message it receives into 'sequence',
+    // routing failures to 'onError'. protocol and className are mutually exclusive per the Synapse
+    // schema; className is empty when a built-in protocol is used.
+    public record InboundEndpoint(Kind kind, String name, String protocol, String className, String sequenceKey,
+                                  FaultSequenceRef onErrorRef, List<Param> parameters, String rawXml)
+            implements SynapseNode {
+        public InboundEndpoint(String name, String protocol, String className, String sequenceKey,
+                               FaultSequenceRef onErrorRef, List<Param> parameters, String rawXml) {
+            this(Kind.INBOUND_ENDPOINT, name, protocol, className, sequenceKey, onErrorRef, parameters, rawXml);
+        }
+    }
+
+    // A single <parameter name="key">value</parameter> under <inboundEndpoint>/<parameters>.
+    public record Param(String name, String value) {
+    }
+
     public interface SynapseNode {
         Kind kind();
     }
@@ -191,6 +210,7 @@ public record Synapse() {
         SEQUENCE_MEDIATOR,
         CLASS_MEDIATOR,
         UNSUPPORTED_MEDIATOR,
-        UNSUPPORTED_ARTIFACT
+        UNSUPPORTED_ARTIFACT,
+        INBOUND_ENDPOINT
     }
 }

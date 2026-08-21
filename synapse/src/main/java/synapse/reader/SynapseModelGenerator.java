@@ -26,6 +26,8 @@ import synapse.model.Synapse.ClassMediator;
 import synapse.model.Synapse.FaultSequence;
 import synapse.model.Synapse.FaultSequenceRef;
 import synapse.model.Synapse.InSequence;
+import synapse.model.Synapse.InboundEndpoint;
+import synapse.model.Synapse.Param;
 import synapse.model.Synapse.PayloadFactory;
 import synapse.model.Synapse.Property;
 import synapse.model.Synapse.Resource;
@@ -63,6 +65,9 @@ public class SynapseModelGenerator {
     private static final String PROPERTY_TAG = "property";
     private static final String FORMAT_TAG = "format";
     private static final String CLASS_TAG = "class";
+    private static final String INBOUND_ENDPOINT_TAG = "inboundEndpoint";
+    private static final String PARAMETERS_TAG = "parameters";
+    private static final String PARAMETER_TAG = "parameter";
 
     private static final String DEFAULT_PROPERTY_SCOPE = "default";
     private static final String DEFAULT_PROPERTY_ACTION = "set";
@@ -100,9 +105,38 @@ public class SynapseModelGenerator {
         return switch (element.getTagName()) {
             case API_TAG -> readApi(element);
             case SEQUENCE_TAG -> readSequence(element);
+            case INBOUND_ENDPOINT_TAG -> readInboundEndpoint(element);
             default -> new UnsupportedArtifact(element.getTagName(), element.getAttribute("name"),
                     serializeElement(element));
         };
+    }
+
+    private static InboundEndpoint readInboundEndpoint(Element element) {
+        String name = element.getAttribute("name");
+        if (name.isBlank()) {
+            throw new IllegalArgumentException("Synapse inboundEndpoint must define a non-empty 'name'.");
+        }
+        String protocol = element.getAttribute("protocol");
+        String className = element.getAttribute("class");
+        String sequenceKey = element.getAttribute("sequence");
+        String onErrorKey = element.getAttribute("onError");
+
+        FaultSequenceRef onErrorRef = onErrorKey.isBlank()
+                ? new FaultSequenceRef.None() : new FaultSequenceRef.KeyRef(onErrorKey);
+
+        List<Param> parameters = new ArrayList<>();
+        for (Element child : childElements(element)) {
+            if (PARAMETERS_TAG.equals(child.getTagName())) {
+                for (Element parameter : childElements(child)) {
+                    if (PARAMETER_TAG.equals(parameter.getTagName())) {
+                        parameters.add(new Param(parameter.getAttribute("name"), parameter.getTextContent().trim()));
+                    }
+                }
+            }
+        }
+
+        return new InboundEndpoint(name, protocol, className, sequenceKey, onErrorRef, parameters,
+                serializeElement(element));
     }
 
     private static Api readApi(Element element) {

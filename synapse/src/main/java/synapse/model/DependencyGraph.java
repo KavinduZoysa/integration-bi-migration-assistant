@@ -19,6 +19,7 @@ package synapse.model;
 
 import org.jetbrains.annotations.NotNull;
 import synapse.model.Synapse.Api;
+import synapse.model.Synapse.InboundEndpoint;
 import synapse.model.Synapse.Kind;
 import synapse.model.Synapse.Sequence;
 import synapse.model.Synapse.SynapseNode;
@@ -90,6 +91,9 @@ public class DependencyGraph {
                     api.kind(), file));
             case Sequence sequence -> Optional.of(new ArtifactNode(sequence.kind() + ":" + sequence.name(),
                     sequence.name(), sequence.kind(), file));
+            case InboundEndpoint inboundEndpoint -> Optional.of(new ArtifactNode(
+                    inboundEndpoint.kind() + ":" + inboundEndpoint.name(), inboundEndpoint.name(),
+                    inboundEndpoint.kind(), file));
             default -> Optional.empty();
         };
     }
