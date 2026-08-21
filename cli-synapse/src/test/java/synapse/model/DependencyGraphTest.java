@@ -193,7 +193,8 @@ public class DependencyGraphTest {
     public void inboundEndpointIgnoresMissingFaultSequence() {
         DependencyGraph graph = build(GRAPH.resolve("inbound-endpoint-no-fault-sequence"));
         assertEquals(ids(graph.nodes().keySet()), Set.of("INBOUND_ENDPOINT:NoErrorInbound", "SEQUENCE:foo"));
-        assertEquals(ids(graph.nodes().get(nodeById(graph, "INBOUND_ENDPOINT:NoErrorInbound"))), Set.of("SEQUENCE:foo"));
+        assertEquals(ids(graph.nodes().get(nodeById(graph, "INBOUND_ENDPOINT:NoErrorInbound"))),
+                Set.of("SEQUENCE:foo"));
         assertTrue(graph.cycles().isEmpty());
         assertTrue(graph.unresolvedNodes().isEmpty());
     }
