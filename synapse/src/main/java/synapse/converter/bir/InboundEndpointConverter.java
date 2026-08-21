@@ -41,13 +41,13 @@ import java.util.Set;
  * wildcard service that forwards every request straight into the referenced {@code sequence}, with
  * {@code onError} handled the same way a {@code <resource>}'s {@code faultSequence} is.
  *
- * <p>Only the {@code http}/{@code https} protocols are translated; every other built-in protocol and
+ * <p>Only the {@code http} protocols are translated; every other built-in protocol and
  * every {@code class}-based (custom Java) inbound endpoint has no generated Ballerina listener
  * equivalent yet and is instead surfaced in the migration report, the same way a {@code <proxy>} is.
  */
 public class InboundEndpointConverter implements BIRConverter<ConversionContext> {
 
-    private static final Set<String> HTTP_PROTOCOLS = Set.of("http", "https");
+    private static final Set<String> HTTP_PROTOCOLS = Set.of("http");
     private static final String HTTP_PORT_PARAM = "inbound.http.port";
     private static final String HTTP_HOST_PARAM = "inbound.http.host";
     private static final String DEFAULT_PORT = "8080";
