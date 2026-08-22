@@ -1,25 +1,8 @@
 import ballerina/http;
-import ballerina/data.xmldata;
 
-function expr(Context ctx) returns error? {
-    ctx.variables.greeting = "Hi";
-    ctx.variables.itemName = convertToString(check xmldata:transform(check convertToXml(ctx.payload), `//items/name`, string));
-    ctx.variables.alias = convertToString(ctx.variables.itemName);
-    ctx.variables.detail = convertToString(check xmldata:transform(check convertToXml(ctx.variables.itemName), `//detail`, string));
-}
-
-function convertToXml(anydata v) returns xml|error {
-    if v is xml {
-        return v;
-    }
-    if v is string {
-        return xml:fromString(v);
-    }
-    return error("Cannot convert the given value to xml.");
-}
-
-function convertToString(anydata v) returns string {
-    return v.toString();
+function foo(Context ctx) returns error? {
+    ctx.payload = {"Hello": "World"};
+    check respond(ctx);
 }
 
 function respond(Context ctx) returns error? {

@@ -50,7 +50,7 @@ The migration tool currently supports the following Synapse elements:
 | `<api>` | HTTP service |
 | `<resource>` | resource function |
 | `<inSequence>` | resource function body |
-| `<inboundEndpoint>` (`protocol="http"`/`"https"`) | dedicated `http:Listener` (port from the `inbound.http.port` parameter) plus a wildcard service forwarding every request to the referenced `sequence` |
+| `<inboundEndpoint>` (`protocol="http"`) | dedicated `http:Listener` (port from the `inbound.http.port` parameter) plus a wildcard service forwarding every request to the referenced `sequence` |
 
 ### Mediators
 

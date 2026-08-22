@@ -49,7 +49,7 @@ public class APIConverter implements BIRConverter<ConversionContext> {
     private static final String REQUEST_PARAM = "request";
 
     // Accessors whose HTTP method may carry a request body, so the generated resource takes an
-    // http:Request parameter. GET, HEAD and OPTIONS are excluded. 'default (any method) is included and
+    // http:Request parameter. GET, HEAD and OPTIONS are excluded. default (any method) is included and
     // matches the escaped keyword form emitted by ANY_METHOD.
     private static final Set<String> REQUEST_BODY_METHODS = Set.of("post", "put", "patch", "delete", "'default");
 
@@ -87,7 +87,7 @@ public class APIConverter implements BIRConverter<ConversionContext> {
             MediatorConverters.convertMediators(resource.inSequence().mediators(), resourceContext);
         }
 
-        FaultSequenceConverter.wrap(resourceContext, context, resource.faultSequenceRef());
+        FaultSequenceConverter.wrap(resourceContext, context, resource.faultSequenceRef(), "faultSequence", "resource");
 
         context.addImports(ConversionContext.MAIN_BAL_FILE, resourceContext.importStatements());
         String path = resource.matchAnyPath() ? ANY_PATH : buildResourcePath(resource.path());

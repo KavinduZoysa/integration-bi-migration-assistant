@@ -111,18 +111,14 @@ public class SynapseModelGenerator {
         };
     }
 
+    @NotNull
     private static InboundEndpoint readInboundEndpoint(Element element) {
+        assert element != null : "element must not be null";
         String name = element.getAttribute("name");
         if (name.isBlank()) {
             throw new IllegalArgumentException("Synapse inboundEndpoint must define a non-empty 'name'.");
         }
-        String protocol = element.getAttribute("protocol");
-        String className = element.getAttribute("class");
-        String sequenceKey = element.getAttribute("sequence");
         String onErrorKey = element.getAttribute("onError");
-
-        FaultSequenceRef onErrorRef = onErrorKey.isBlank()
-                ? new FaultSequenceRef.None() : new FaultSequenceRef.KeyRef(onErrorKey);
 
         List<Param> parameters = new ArrayList<>();
         for (Element child : childElements(element)) {
@@ -135,8 +131,10 @@ public class SynapseModelGenerator {
             }
         }
 
-        return new InboundEndpoint(name, protocol, className, sequenceKey, onErrorRef, parameters,
-                serializeElement(element));
+        return new InboundEndpoint(name, element.getAttribute("protocol"), element.getAttribute("class"),
+                element.getAttribute("sequence"),
+                onErrorKey.isBlank() ? new FaultSequenceRef.None() : new FaultSequenceRef.KeyRef(onErrorKey),
+                parameters, serializeElement(element));
     }
 
     private static Api readApi(Element element) {

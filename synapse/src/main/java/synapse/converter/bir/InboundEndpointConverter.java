@@ -91,7 +91,8 @@ public class InboundEndpointConverter implements BIRConverter<ConversionContext>
         resourceContext.statements().add(new Statement.BallerinaStatement("check emitPayload(ctx, request);"));
         MediatorConverters.convertMediators(
                 List.of(new SequenceMediator(inboundEndpoint.sequenceKey())), resourceContext);
-        FaultSequenceConverter.wrap(resourceContext, context, inboundEndpoint.onErrorRef());
+        FaultSequenceConverter.wrap(resourceContext, context, inboundEndpoint.onErrorRef(), "onError",
+                "inbound endpoint");
 
         context.addImports(ConversionContext.MAIN_BAL_FILE, resourceContext.importStatements());
         Resource resource = new Resource(ANY_METHOD, ANY_PATH, parameters,

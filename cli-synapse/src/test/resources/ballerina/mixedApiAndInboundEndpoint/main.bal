@@ -1,9 +1,22 @@
-import ballerina/http;
 import ballerina/log;
+import ballerina/http;
 
-public listener http:Listener NoErrorInboundListener = new (8086);
+public listener http:Listener httpListener = new (8080);
 
-service / on NoErrorInboundListener {
+service /mixed on httpListener {
+    resource function get status(http:Caller caller) returns error? {
+        Context ctx = {variables: {}, caller: caller};
+        do {
+            ctx.payload = {"status": "UP"};
+            check respond(ctx);
+        } on fail error err {
+        }
+    }
+}
+
+public listener http:Listener MixedInboundListener = new (8089);
+
+service / on MixedInboundListener {
     resource function 'default [string... path](http:Caller caller, http:Request request) returns error? {
         Context ctx = {variables: {}, caller: caller};
         do {

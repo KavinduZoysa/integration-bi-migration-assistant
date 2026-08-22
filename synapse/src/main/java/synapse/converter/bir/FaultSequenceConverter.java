@@ -22,6 +22,7 @@ import common.BallerinaModel.OnFailClause;
 import common.BallerinaModel.Statement;
 import common.BallerinaModel.TypeBindingPattern;
 import common.BallerinaModel.TypeDesc;
+import org.jetbrains.annotations.NotNull;
 import synapse.converter.ConversionContext;
 import synapse.converter.ConversionContext.UnsupportedEntry;
 import synapse.converter.ResourceContext;
@@ -60,14 +61,15 @@ final class FaultSequenceConverter {
     // An unresolved key is reported and falls back to the same default as no faultSequence at all.
     // An explicit but empty <faultSequence/> is the author's deliberate choice to leave failures
     // unhandled, so it gets an empty 'on fail'.
-    static void wrap(ResourceContext resourceContext, ConversionContext context, FaultSequenceRef faultSequenceRef) {
+    static void wrap(ResourceContext resourceContext, ConversionContext context, FaultSequenceRef faultSequenceRef,
+                      String sourceAttribute, String constructName) {
         switch (faultSequenceRef) {
             case FaultSequenceRef.KeyRef(String key) -> {
                 if (context.sequenceMetadata(key).isPresent()) {
                     wrapInFaultHandler(resourceContext, List.of(new SequenceMediator(key)));
                 } else {
                     boolean usesProjectFaultSequence = wrapInGlobalDefaultFaultHandler(resourceContext, context);
-                    reportUnresolvedFaultSequence(key, resourceContext, usesProjectFaultSequence);
+                    reportUnresolvedFaultSequence(key, resourceContext, usesProjectFaultSequence, sourceAttribute);
                 }
             }
             case FaultSequenceRef.Inline(FaultSequence faultSequence) -> {
@@ -79,7 +81,7 @@ final class FaultSequenceConverter {
             }
             case FaultSequenceRef.None ignored -> {
                 if (wrapInGlobalDefaultFaultHandler(resourceContext, context)) {
-                    reportImplicitFaultSequence(resourceContext);
+                    reportImplicitFaultSequence(resourceContext, sourceAttribute, constructName);
                 }
             }
         }
@@ -110,8 +112,11 @@ final class FaultSequenceConverter {
 
     // Extracts everything after the ctx local at index 0 into its own list, clearing it from
     // resourceContext so the next section of the resource body starts clean.
+    @NotNull
     private static List<Statement> extractTrailingStatements(ResourceContext resourceContext) {
         List<Statement> statements = resourceContext.statements();
+        assert resourceContext.contextAvailable() && !statements.isEmpty()
+                : "resource context must have its ctx local declared at statement index 0";
         List<Statement> tail = new ArrayList<>(statements.subList(1, statements.size()));
         statements.subList(1, statements.size()).clear();
         return tail;
@@ -125,14 +130,14 @@ final class FaultSequenceConverter {
                 "ctx.variables." + Synapse.ERROR_MESSAGE_PROPERTY + " = " + FAULT_ERROR_VAR + ".message();"));
     }
 
-    // Flags a faultSequence="X" attribute that names no known sequence with an inline TODO comment,
-    // so the fallback is never silent. usesProjectFaultSequence distinguishes what it actually falls
-    // back to: the project's "fault" sequence, or the hardcoded default handler.
+    // Flags a faultSequence="X" (or onError="X") attribute that names no known sequence with an inline
+    // TODO comment, so the fallback is never silent. usesProjectFaultSequence distinguishes what it
+    // actually falls back to: the project's "fault" sequence, or the hardcoded default handler.
     private static void reportUnresolvedFaultSequence(String key, ResourceContext resourceContext,
-                                                        boolean usesProjectFaultSequence) {
+                                                        boolean usesProjectFaultSequence, String sourceAttribute) {
         String file = resourceContext.shared().currentFile();
         String origin = file.isEmpty() ? "" : " (from " + file + ")";
-        String snippet = "faultSequence=\"" + key + "\"";
+        String snippet = sourceAttribute + "=\"" + key + "\"";
         String fallback = usesProjectFaultSequence
                 ? "falling back to the project-level '" + Synapse.DEFAULT_FAULT_SEQUENCE_KEY + "' sequence"
                 : "falling back to the default error handler";
@@ -142,7 +147,7 @@ final class FaultSequenceConverter {
         statements.add(statements.size() - 1, new Statement.Comment(
                 "TODO: Unresolved Synapse fault sequence reference '" + key + "'" + origin + ". " + detail));
         resourceContext.shared().reportUnsupported(
-                new UnsupportedEntry("Unresolved fault sequence", "faultSequence", file, detail, snippet));
+                new UnsupportedEntry("Unresolved fault sequence", sourceAttribute, file, detail, snippet));
     }
 
     // Falls back to the project's "fault" sequence, if defined, else the hardcoded default. Reached for
@@ -161,19 +166,20 @@ final class FaultSequenceConverter {
 
     // Surfaces the implicit fallback to the project's "fault" sequence in the migration report, and flags
     // it with an inline TODO comment, so the fallback is visible in the generated code too, not just the
-    // report. Only reached for a resource with no faultSequence of its own; an unresolved explicit
-    // faultSequence="X" is reported by reportUnresolvedFaultSequence instead.
-    private static void reportImplicitFaultSequence(ResourceContext resourceContext) {
+    // report. Only reached for a construct with no faultSequence/onError of its own; an unresolved
+    // explicit faultSequence="X"/onError="X" is reported by reportUnresolvedFaultSequence instead.
+    private static void reportImplicitFaultSequence(ResourceContext resourceContext, String sourceAttribute,
+                                                     String constructName) {
         String file = resourceContext.shared().currentFile();
-        String detail = "This resource has no faultSequence of its own; because a project-level sequence "
-                + "named '" + Synapse.DEFAULT_FAULT_SEQUENCE_KEY + "' exists, it is used implicitly as this "
-                + "resource's error handler. Verify this matches the intended behavior, or rename the "
-                + "sequence if it is unrelated to error handling.";
+        String detail = "This " + constructName + " has no " + sourceAttribute + " of its own; because a "
+                + "project-level sequence named '" + Synapse.DEFAULT_FAULT_SEQUENCE_KEY + "' exists, it is used "
+                + "implicitly as this " + constructName + "'s error handler. Verify this matches the intended "
+                + "behavior, or rename the sequence if it is unrelated to error handling.";
         List<Statement> statements = resourceContext.statements();
         statements.add(statements.size() - 1, new Statement.Comment(
                 "TODO: Implicit Synapse fault sequence '" + Synapse.DEFAULT_FAULT_SEQUENCE_KEY + "'. " + detail));
         resourceContext.shared().reportUnsupported(
-                new UnsupportedEntry("Implicit fault sequence", "faultSequence", file, detail, ""));
+                new UnsupportedEntry("Implicit fault sequence", sourceAttribute, file, detail, ""));
     }
 
     // No faultSequence at all, and no project-level "fault" sequence either: log the error and respond
@@ -188,6 +194,7 @@ final class FaultSequenceConverter {
     // Log the error and respond with an error status and a JSON error payload carrying the caught
     // error's message. respond() is a no-op if the caller has already had a response attempted on it,
     // so this is always safe to call.
+    @NotNull
     private static List<Statement> defaultOnFailBody() {
         return List.of(
                 new Statement.BallerinaStatement(

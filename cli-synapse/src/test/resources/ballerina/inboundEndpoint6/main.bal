@@ -1,7 +1,5 @@
 import ballerina/http;
 
-public listener http:Listener httpListener = new (8080);
-
 public listener http:Listener HttpInboundEPListener = new (8085);
 
 service / on HttpInboundEPListener {

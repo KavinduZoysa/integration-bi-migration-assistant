@@ -27,6 +27,9 @@ import synapse.converter.bir.BIRConverter;
 import synapse.model.Synapse.PayloadFactory;
 import synapse.model.Synapse.SynapseNode;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 /**
  * Converts a Synapse {@code <payloadFactory>} mediator into an assignment of the built payload onto
  * {@code ctx.payload}. The payload is not written to an {@code http:Response} here; a later
@@ -34,22 +37,45 @@ import synapse.model.Synapse.SynapseNode;
  */
 public class PayloadFactoryConverter implements BIRConverter<ScopeContext> {
 
+    // Matches a JSON string value that is exactly a Synapse '${properties.<scope>.<name>}' template
+    // placeholder, e.g. "${properties.synapse.ERROR_MESSAGE}", quotes included.
+    private static final Pattern PROPERTY_TEMPLATE_PATTERN =
+            Pattern.compile("\"\\$\\{properties\\.(?:synapse|default)\\.([A-Za-z_][A-Za-z0-9_]*)\\}\"");
+
     @Override
     public void convert(SynapseNode node, ScopeContext context) {
         PayloadFactory payloadFactory = (PayloadFactory) node;
-        Expression value = extractValue(payloadFactory.mediaType(), payloadFactory.format());
+        Expression value = extractValue(payloadFactory.mediaType(), payloadFactory.format(), context);
         context.ensureContextAvailable();
         context.statements().add(new Statement.VarAssignStatement(
                 new Expression.FieldAccess(new Expression.VariableReference("ctx"), "payload"), value));
     }
 
-    private static Expression extractValue(String mediaType, String format) {
+    private static Expression extractValue(String mediaType, String format, ScopeContext context) {
         return switch (mediaType) {
             case "text" -> new StringConstant(format);
             case "xml" -> new XMLTemplate(format);
             // json (and others): the <format> is already a valid Ballerina literal
-            // expression.
-            default -> new BallerinaExpression(format);
+            // expression, aside from any '${properties...}' placeholders that still need resolving.
+            default -> new BallerinaExpression(resolvePropertyTemplates(format, context));
         };
+    }
+
+    // Replaces a whole-value '${properties.<scope>.<name>}' JSON string field with the unquoted
+    // ctx.variables.<name> field access it stands for, when <name> is a known default-scope property.
+    // An unrecognized name is left untouched.
+    private static String resolvePropertyTemplates(String format, ScopeContext context) {
+        var availableProperties = context.shared().availableDefaultScopeProperties();
+        Matcher matcher = PROPERTY_TEMPLATE_PATTERN.matcher(format);
+        StringBuilder result = new StringBuilder();
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            String replacement = availableProperties.contains(name)
+                    ? "ctx.variables." + name
+                    : matcher.group();
+            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(result);
+        return result.toString();
     }
 }

@@ -4,9 +4,9 @@
 
 ## Implicit fault sequence (1)
 
-### `<faultSequence>` — inboundEndpoint.xml
+### `<onError>` — inboundEndpoint.xml
 
-This resource has no faultSequence of its own; because a project-level sequence named 'fault' exists, it is used implicitly as this resource's error handler. Verify this matches the intended behavior, or rename the sequence if it is unrelated to error handling.
+This inbound endpoint has no onError of its own; because a project-level sequence named 'fault' exists, it is used implicitly as this inbound endpoint's error handler. Verify this matches the intended behavior, or rename the sequence if it is unrelated to error handling.
 
 ```xml
 

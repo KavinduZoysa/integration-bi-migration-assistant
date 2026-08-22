@@ -77,6 +77,8 @@ public class ConversionContext {
     private DependencyGraph dependencyGraph;
     private JavaSourceResolver javaSourceResolver = new JavaSourceResolver(List.of());
     private String currentFile = "";
+    private boolean sharedListenerDeclared;
+    private boolean anyListenerWritten;
 
     public void setDependencyGraph(DependencyGraph dependencyGraph) {
         this.dependencyGraph = dependencyGraph;
@@ -111,6 +113,35 @@ public class ConversionContext {
     }
 
     /**
+     * Whether the shared HTTP listener every {@code <api>} service binds to has already been declared in
+     * {@code main.bal}. Set once, the first time an {@code <api>} artifact is converted, so later rounds
+     * (including inbound-endpoint-only ones) don't redeclare it; survives {@link #clearArtifactOutput()}
+     * since the shared listener, once written, must never be written again.
+     */
+    public boolean isSharedListenerDeclared() {
+        return sharedListenerDeclared;
+    }
+
+    public void setSharedListenerDeclared(boolean sharedListenerDeclared) {
+        this.sharedListenerDeclared = sharedListenerDeclared;
+    }
+
+    /**
+     * Whether any listener at all — the shared one or an {@code <inboundEndpoint>}'s dedicated one — has
+     * been written to {@code main.bal} yet, across every round so far. Used to decide, once every
+     * artifact has been converted, whether the shared listener must still be added as a fallback so the
+     * generated package always has at least one runnable listener; survives {@link #clearArtifactOutput()}
+     * for the same reason {@link #isSharedListenerDeclared()} does.
+     */
+    public boolean isAnyListenerWritten() {
+        return anyListenerWritten;
+    }
+
+    public void setAnyListenerWritten(boolean anyListenerWritten) {
+        this.anyListenerWritten = anyListenerWritten;
+    }
+
+    /**
      * Records an unsupported Synapse construct so it can be surfaced in the migration report. Populated
      * as artifacts are converted and preserved across {@link #clearArtifactOutput()}, since the report
      * is written once at the end of the whole run.
@@ -139,9 +170,11 @@ public class ConversionContext {
      * {@link #clearArtifactOutput()} once flushed.
      */
     public void addListener(Listener listener) {
+        assert listener != null : "listener must not be null";
         listeners.add(listener);
     }
 
+    @NotNull
     public List<Listener> listeners() {
         return listeners;
     }
