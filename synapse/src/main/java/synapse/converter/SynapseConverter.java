@@ -426,9 +426,8 @@ public final class SynapseConverter {
         Path mainBalFile = targetDir.resolve(ConversionContext.MAIN_BAL_FILE);
         List<Listener> listeners = new ArrayList<>();
         // The shared HTTP listener every <api> service binds to is declared once, the first round that
-        // actually converts an <api> (an inbound-endpoint-only project never needs it); an
-        // <inboundEndpoint>'s own dedicated listener (context.listeners()) is per-artifact output instead,
-        // so it is appended on whichever round actually introduces it.
+        // actually converts an <api>; an <inboundEndpoint>'s own dedicated listener (context.listeners())
+        // is per-artifact output instead, so it is appended on whichever round actually introduces it.
         if (!context.isSharedListenerDeclared() && usesSharedListener(context.services())) {
             listeners.add(new HTTPListener(LISTENER_NAME, DEFAULT_PORT, DEFAULT_HOST));
             context.setSharedListenerDeclared(true);
@@ -451,18 +450,14 @@ public final class SynapseConverter {
         }
     }
 
-    // Whether this round's services include one bound to the shared listener (i.e. an <api> was just
-    // converted), as opposed to only <inboundEndpoint> services, which bind to their own dedicated
-    // listener instead.
+    // Whether this round's services include one bound to the shared listener, as opposed to only
+    // <inboundEndpoint> services, which bind to their own dedicated listener instead.
     private static boolean usesSharedListener(List<Service> services) {
         return services.stream().anyMatch(service -> service.listenerRefs().contains(LISTENER_NAME));
     }
 
     // Guarantees the generated package always has at least one runnable HTTP listener, even when nothing
-    // converted produced one of its own (e.g. a project containing only unsupported artifacts such as a
-    // <proxy>, or only a plain <sequence> with no <api>/<inboundEndpoint>): falls back to the shared
-    // listener as a minimal skeleton. Only takes effect if no round so far — neither an <api>'s shared
-    // listener nor an <inboundEndpoint>'s dedicated one — has already written a listener.
+    // converted produced one of its own.
     private static void ensureListenerSkeleton(ConversionContext context) {
         if (!context.isAnyListenerWritten()) {
             context.addListener(new HTTPListener(LISTENER_NAME, DEFAULT_PORT, DEFAULT_HOST));
@@ -482,9 +477,6 @@ public final class SynapseConverter {
             throws IOException {
         boolean exists = Files.exists(file);
         if (listeners.isEmpty() && services.isEmpty() && functions.isEmpty() && records.isEmpty()) {
-            // Nothing to add this round (e.g. a plain <sequence> round contributing only to
-            // functions.bal): never create the file just to hold nothing, since that would leave a
-            // stray blank line once a later round appends its own first construct.
             return;
         }
         TextDocument document = new TextDocument(file.getFileName().toString(),
