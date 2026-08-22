@@ -1,11 +1,15 @@
 import ballerina/log;
 
+public function commonConfig1Flow(Context ctx) {
+    log:printInfo("xxx: common config1 logger invoked");
+}
+
 public function commonConfig2Sub_Flow(Context ctx) {
     log:printInfo("xxx: common config2 logger invoked");
 }
 
-public function commonConfig1Flow(Context ctx) {
-    log:printInfo("xxx: common config1 logger invoked");
+public function mainconfigSub_Flow(Context ctx) {
+    log:printInfo("xxx: main config logger invoked");
 }
 
 function _dwMethod1_(json payload) returns json|error {
@@ -27,8 +31,4 @@ function _dwMethod0_(json payload) returns json|error {
         _var_0 = {"currency": "EUR"};
     }
     return _var_0;
-}
-
-public function mainconfigSub_Flow(Context ctx) {
-    log:printInfo("xxx: main config logger invoked");
 }
