@@ -8,8 +8,7 @@ service /orders on httpListener {
         Context ctx = {variables: {}, caller: caller};
         do {
             check emitPayload(ctx, request);
-            // TODO: Unsupported Synapse mediator '<filter>' (from api.xml). Control-flow mediator not supported; the wrapper
-            // logic is not applied and nested mediators below need manual restructuring.
+            // TODO: Unsupported Synapse mediator '<filter>' (from api.xml). Control-flow mediator not supported; the wrapper logic is not applied and nested mediators below need manual restructuring.
             // Original Synapse:
             // <filter regex="premium" source="$ctx:type" xmlns="http://ws.apache.org/ns/synapse">
             //                 <then>

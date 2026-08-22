@@ -31,7 +31,6 @@ import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static common.BallerinaModel.Expression.BallerinaExpression;
 import static common.BallerinaModel.Expression.StringConstant;
@@ -541,13 +540,13 @@ public record BallerinaModel(DefaultPackage defaultPackage, List<Module> modules
         }
 
         public static Function publicFunction(String funcName, List<Parameter> parameters, TypeDesc returnType,
-                                   FunctionBody body) {
+                                              FunctionBody body) {
             return new Function(Optional.of("public"), funcName, parameters, Optional.of(returnType), body);
         }
     }
 
     public record ClassDef(String className, List<TypeDesc> typeInclusions, List<ObjectField> fields,
-                        List<Function> methods) {
+                           List<Function> methods) {
     }
 
     public interface FunctionBody {
@@ -971,10 +970,6 @@ public record BallerinaModel(DefaultPackage defaultPackage, List<Module> modules
 
         record Comment(String comment) implements Statement {
 
-            // Leaves headroom for indentation added by the formatter, keeping wrapped lines within the
-            // repo's 120-character convention even when the comment is nested a few levels deep.
-            private static final int MAX_LINE_LENGTH = 110;
-
             public Comment {
                 if (comment == null) {
                     comment = "";
@@ -985,31 +980,8 @@ public record BallerinaModel(DefaultPackage defaultPackage, List<Module> modules
             @Override
             public String toString() {
                 return "\n// " +
-                        comment.lines().filter(Predicate.not(String::isBlank)).flatMap(Comment::wrapLine)
-                                .collect(Collectors.joining("\n// ")) +
+                        comment.lines().filter(Predicate.not(String::isBlank)).collect(Collectors.joining("\n// ")) +
                         "\n";
-            }
-
-            private static Stream<String> wrapLine(String line) {
-                if (line.length() <= MAX_LINE_LENGTH) {
-                    return Stream.of(line);
-                }
-                List<String> wrapped = new ArrayList<>();
-                StringBuilder current = new StringBuilder();
-                for (String word : line.split(" ")) {
-                    if (current.length() > 0 && current.length() + 1 + word.length() > MAX_LINE_LENGTH) {
-                        wrapped.add(current.toString());
-                        current.setLength(0);
-                    }
-                    if (current.length() > 0) {
-                        current.append(' ');
-                    }
-                    current.append(word);
-                }
-                if (current.length() > 0) {
-                    wrapped.add(current.toString());
-                }
-                return wrapped.stream();
             }
         }
     }
