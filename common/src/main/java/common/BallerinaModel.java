@@ -364,24 +364,83 @@ public record BallerinaModel(DefaultPackage defaultPackage, List<Module> modules
 
     }
 
+    public sealed interface HTTPInterceptor {
+
+        String className();
+
+        List<ObjectField> fields();
+
+        Optional<Function> initFunc();
+
+        record RequestInterceptor(String className, List<ObjectField> fields, Optional<Function> initFunc,
+                                  Resource resource) implements HTTPInterceptor {
+
+            public RequestInterceptor(String className, Resource resource) {
+                this(className, List.of(), Optional.empty(), resource);
+            }
+        }
+
+        record ResponseInterceptor(String className, List<ObjectField> fields, Optional<Function> initFunc,
+                                   Remote remote) implements HTTPInterceptor {
+
+            public ResponseInterceptor(String className, Remote remote) {
+                this(className, List.of(), Optional.empty(), remote);
+            }
+        }
+
+        record RequestErrorInterceptor(String className, List<ObjectField> fields, Optional<Function> initFunc,
+                                       Resource resource) implements HTTPInterceptor {
+
+            public RequestErrorInterceptor(String className, Resource resource) {
+                this(className, List.of(), Optional.empty(), resource);
+            }
+        }
+
+        record ResponseErrorInterceptor(String className, List<ObjectField> fields, Optional<Function> initFunc,
+                                        Remote remote) implements HTTPInterceptor {
+
+            public ResponseErrorInterceptor(String className, Remote remote) {
+                this(className, List.of(), Optional.empty(), remote);
+            }
+        }
+    }
+
     public record Service(String basePath, List<String> listenerRefs, Optional<Function> initFunc,
                           List<Resource> resources, List<Function> functions,
-                          List<ObjectField> fields, List<Remote> remoteFunctions, Optional<Comment> comment) {
+                          List<ObjectField> fields, List<Remote> remoteFunctions,
+                          Optional<String> apiKitRouterRef, List<HTTPInterceptor> httpInterceptors,
+                          Optional<Comment> comment) {
+        public Service(String basePath, List<String> listenerRefs, Optional<Function> initFunc,
+                       List<Resource> resources, List<Function> functions, List<ObjectField> fields,
+                       List<Remote> remoteFunctions, List<HTTPInterceptor> httpInterceptors,
+                       Optional<Comment> comment) {
+            this(basePath, listenerRefs, initFunc, resources, functions, fields, remoteFunctions,
+                    Optional.empty(), httpInterceptors, comment);
+        }
+
+        public Service(String basePath, List<String> listenerRefs, Optional<Function> initFunc,
+                       List<Resource> resources, List<Function> functions, List<ObjectField> fields,
+                       List<Remote> remoteFunctions, Optional<Comment> comment) {
+            this(basePath, listenerRefs, initFunc, resources, functions, fields, remoteFunctions,
+                    Optional.empty(), Collections.emptyList(), comment);
+        }
+
         public Service(String basePath, String listenerRef, List<Resource> resources) {
             this(basePath, Collections.singletonList(listenerRef), Optional.empty(), resources,
-                    Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), Optional.empty());
+                    Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+                    Optional.empty(), Collections.emptyList(), Optional.empty());
         }
 
         public Service(String basePath, String listenerRef, List<Resource> resources, Comment comment) {
             this(basePath, Collections.singletonList(listenerRef), Optional.empty(), resources,
-                    Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
-                    Optional.ofNullable(comment));
+                    Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), Optional.empty(),
+                    Collections.emptyList(), Optional.ofNullable(comment));
         }
 
         public Service(String basePath, List<String> listenerRefs, Optional<Function> initFunc,
                        List<Resource> resources, List<Function> functions, List<ObjectField> fields) {
             this(basePath, listenerRefs, initFunc, resources, functions, fields, Collections.emptyList(),
-                    Optional.empty());
+                    Optional.empty(), Collections.emptyList(), Optional.empty());
         }
     }
 

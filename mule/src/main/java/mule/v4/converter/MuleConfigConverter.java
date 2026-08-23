@@ -54,8 +54,6 @@ import static common.ConversionUtils.stmtFrom;
 import static common.ConversionUtils.typeFrom;
 import static mule.v4.Constants.BAL_ERROR_TYPE;
 import static mule.v4.Constants.FUNC_NAME_ASYC_TEMPLATE;
-import static mule.v4.Constants.HTTP_CLIENT_TYPE;
-import static mule.v4.Constants.HTTP_REQUEST_REF;
 import static mule.v4.Constants.JMS_CONNECTION_TYPE;
 import static mule.v4.Constants.JMS_MAP_MESSAGE_TYPE;
 import static mule.v4.Constants.JMS_MESSAGE_PRODUCER_TYPE;
@@ -315,7 +313,7 @@ public class MuleConfigConverter {
                 return convertTransformMessage(ctx, transformMessage);
             }
             case ApiKitRouter apiKitRouter -> {
-                return convertApiKitRouter(ctx, apiKitRouter);
+                return new WorkerStatementResult(List.of());
             }
             case AnypointMqAck ack -> {
                 return convertAnypointMqAck(ctx, ack);
@@ -1134,61 +1132,6 @@ public class MuleConfigConverter {
         // This works for now because we concatenate and create a body block `{ stmts }`
         // before parsing.
         return new WorkerStatementResult(List.of(stmtFrom(comment)));
-    }
-
-    private static WorkerStatementResult convertApiKitRouter(Context ctx, ApiKitRouter apiKitRouter) {
-        String basePath = ctx.currentServiceBasePath != null ? ctx.currentServiceBasePath : "<unknown>";
-        String resourcePath = ctx.currentResourcePath != null ? ctx.currentResourcePath : "<unknown>";
-
-        String comment = "// TODO: APIKit router - basePath: %s, resourcePath: %s".formatted(basePath, resourcePath);
-        ctx.addImport(new Import("ballerina", "http"));
-
-        // Create the redirect client
-        String listenerPort = ctx.currentListenerPort != null ? ctx.currentListenerPort : "<LISTENER_PORT>";
-        String clientPath = "http://localhost:" + listenerPort;
-        List<Statement> stmts = new ArrayList<>();
-        Statement.VarDeclStatment clientDecl = new Statement.VarDeclStatment(typeFrom(HTTP_CLIENT_TYPE), "apiKitClient",
-                new BallerinaModel.Expression.Check(new BallerinaModel.Expression.NewExpression(
-                        List.of(new StringConstant(clientPath)))));
-        stmts.add(clientDecl);
-
-        // Use serviceBasePath + apiKitBasePath for redirect
-        String apiKitBasePath = ctx.getApiKitBasePath(apiKitRouter.configRef());
-        String normalizedBasePath = basePath.endsWith("/") ? basePath.substring(0, basePath.length() - 1) : basePath;
-        String normalizedApiKitBasePath = apiKitBasePath.startsWith("/") ? apiKitBasePath : "/" + apiKitBasePath;
-        String combinedBasePath = normalizedBasePath + normalizedApiKitBasePath;
-        String redirectBasePath = (combinedBasePath.endsWith("/") ? combinedBasePath : combinedBasePath + "/");
-        Statement.VarDeclStatment redirectPath =
-                new Statement.VarDeclStatment(BallerinaModel.TypeDesc.BuiltinType.STRING,
-                        "apiKitRedirectPath",
-                        exprFrom("%s + %s.rawPath.substring(%s.length() + %s.length())".formatted(
-                                new StringConstant(redirectBasePath),
-                                HTTP_REQUEST_REF,
-                                new StringConstant(basePath),
-                                new StringConstant(resourcePath))));
-        stmts.add(redirectPath);
-        stmts.add(stmtFrom("""
-                match %1$s.method {
-                    "GET" => {
-                       %5$s = check %2$s->get(%3$s);
-                    }
-                    "POST" => {
-                        %5$s = check %2$s->post(%3$s, check %4$s.getJsonPayload());
-                    }
-                    "PUT" => {
-                        %5$s = check %2$s->put(%3$s, check %4$s.getJsonPayload());
-                    }
-                    "DELETE" => {
-                        %5$s = check %2$s->delete(%3$s, check %4$s.getJsonPayload());
-                    }
-                    _ => {
-                        panic error("Method not allowed");
-                    }
-                }
-                """.formatted(HTTP_REQUEST_REF, clientDecl.ref(), redirectPath.ref(), HTTP_REQUEST_REF,
-                Constants.PAYLOAD_FIELD_ACCESS)));
-        stmts.add(new Statement.Comment("TODO: try to directly call the endpoints generated for the api kit"));
-        return new WorkerStatementResult(stmts);
     }
 
     // Mule 4.x Error Handling Converters

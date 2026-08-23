@@ -27,6 +27,10 @@ public class MuleCli {
     private static final Logger logger = Logger.getLogger(MuleCli.class.getName());
 
     public static void main(String[] args) {
+        args = new String[3];
+        args[0] = "-o";
+        args[1] = "/tmp";
+        args[2] = "/Users/admin/GIT/migration-tools/mule_tests/Bitbucket Codebase/jms_message";
         if (args.length == 0) {
             printUsageAndExit();
         }
