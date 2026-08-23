@@ -74,10 +74,6 @@ public class Context extends ContextBase {
     private final Map<File, ParseResult> parseResults = new HashMap<>();
     private final Map<File, FileContext> fileContexts = new HashMap<>();
     private final Map<File, mule.common.MUnitModel.TestSuite> munitParseResults = new HashMap<>();
-    public String currentServiceBasePath;
-    public String currentResourcePath;
-    public String currentListenerPort;
-    public String currentApiKitBasePath;
     public BallerinaModel.Expression.VariableReference jmsCaller;
     public List<BallerinaModel.ObjectField> serviceFields = new ArrayList<>();
     public List<BallerinaModel.Statement> initFunctionBody = new ArrayList<>();
@@ -246,16 +242,6 @@ public class Context extends ContextBase {
         }
     }
 
-    public String getApiKitBasePath(ApiKitConfig apiKitConfig) {
-        return getApiKitBasePath(apiKitConfig.name());
-    }
-
-    public String getApiKitBasePath(String configName) {
-        String key = configName == null || configName.isBlank() ? "__defaultApiKitConfig__" : configName;
-        return projectCtx.apiKitBasePaths.computeIfAbsent(key,
-                ignored -> "/apikit" + projectCtx.apiKitBasePaths.size());
-    }
-
     public void resetServiceState() {
         this.jmsCaller = null;
         this.initFunctionBody.clear();
@@ -309,8 +295,6 @@ public class Context extends ContextBase {
         public final HashMap<String, ModuleVar> configurableVars = new LinkedHashMap<>();
         List<HashMap<String, ModuleTypeDef>> typeDefMaps = new ArrayList<>();
         List<HashMap<String, BallerinaModel.Function>> functionMaps = new ArrayList<>();
-
-        private final Map<String, String> apiKitBasePaths = new HashMap<>();
 
         public void addJavaDependency(MuleToBalConverter.JavaDependencies dependencies) {
             javaDependencies.add(dependencies);
@@ -494,6 +478,9 @@ public class Context extends ContextBase {
         public int jmsSessionCount = 0;
         public int jmsProducerCount = 0;
         public int jmsMessageCount = 0;
+        public int requestInterceptorCount = 0;
+        public int responseInterceptorCount = 0;
+        public int responseErrorInterceptorCount = 0;
         public Map<String, Integer> dwFunctionPrefixCounters = new HashMap<>();
     }
 

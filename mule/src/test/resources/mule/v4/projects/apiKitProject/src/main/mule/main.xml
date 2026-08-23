@@ -8,6 +8,13 @@ http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/a
   <flow name="apiKitMain">
     <http:listener config-ref="http-listener-config" path="/api">
       </http:listener>
+    <logger level="INFO" message="Before APIKit router" />
     <apikit:router config-ref="apikit-config" />
+    <logger level="INFO" message="After APIKit router" />
+    <error-handler>
+      <on-error-continue logException="true">
+        <logger level="ERROR" message="APIKit error handled" />
+      </on-error-continue>
+    </error-handler>
   </flow>
 </mule>

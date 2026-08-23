@@ -28,10 +28,12 @@ import java.util.regex.Pattern;
 
 public record MuleModel() {
 
-    public record HttpListener(Kind kind, String configRef, String resourcePath, String[] allowedMethods)
+    public record HttpListener(Kind kind, String configRef, String resourcePath, String[] allowedMethods,
+                               boolean hasResponse, boolean hasErrorResponse)
             implements MuleRecord {
-        public HttpListener(String configRef, String resourcePath, String[] allowedMethods) {
-            this(Kind.HTTP_LISTENER, configRef, resourcePath, allowedMethods);
+        public HttpListener(String configRef, String resourcePath, String[] allowedMethods,
+                            boolean hasResponse, boolean hasErrorResponse) {
+            this(Kind.HTTP_LISTENER, configRef, resourcePath, allowedMethods, hasResponse, hasErrorResponse);
         }
     }
 
