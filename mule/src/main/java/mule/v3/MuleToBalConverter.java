@@ -39,11 +39,13 @@ import static common.BallerinaModel.BlockFunctionBody;
 import static common.BallerinaModel.ClassDef;
 import static common.BallerinaModel.Expression.BallerinaExpression;
 import static common.BallerinaModel.Function;
+import static common.BallerinaModel.HTTPInterceptor;
 import static common.BallerinaModel.Import;
 import static common.BallerinaModel.Listener;
 import static common.BallerinaModel.ModuleTypeDef;
 import static common.BallerinaModel.ModuleVar;
 import static common.BallerinaModel.Parameter;
+import static common.BallerinaModel.Remote;
 import static common.BallerinaModel.Resource;
 import static common.BallerinaModel.Service;
 import static common.BallerinaModel.Statement;
@@ -318,7 +320,54 @@ public class MuleToBalConverter {
 
         // Create a service from the flow
         Service service = genBalService(ctx, src, flow.flowBlocks(), functions);
+        if (src.hasErrorResponse()) {
+            service.httpInterceptors().add(genResponseErrorInterceptor(ctx));
+        }
+        if (src.hasResponse()) {
+            service.httpInterceptors().add(genResponseInterceptor(ctx));
+        }
         services.add(service);
+    }
+
+    private static HTTPInterceptor genResponseErrorInterceptor(Context ctx) {
+        String interceptedResponse = "interceptedResponse";
+        List<Statement> body = new ArrayList<>();
+        body.add(stmtFrom("Context %s = {%s: {%s: new, %s: %s}};".formatted(Constants.CONTEXT_REFERENCE,
+                Constants.INBOUND_PROPERTIES_REF, Constants.HTTP_REQUEST_REF, Constants.HTTP_RESPONSE_REF,
+                interceptedResponse)));
+        body.add(stmtFrom("%s.%s.setPayload(%s.payload);".formatted(Constants.INBOUND_PROPERTIES_FIELD_ACCESS,
+                Constants.HTTP_RESPONSE_REF, Constants.CONTEXT_REFERENCE)));
+        body.add(stmtFrom("return %s.%s;".formatted(Constants.INBOUND_PROPERTIES_FIELD_ACCESS,
+                Constants.HTTP_RESPONSE_REF)));
+
+        List<Parameter> parameters = List.of(
+                new Parameter(Constants.HTTP_REQUEST_CONTEXT_REF, typeFrom(Constants.HTTP_REQUEST_CONTEXT_TYPE)),
+                new Parameter(interceptedResponse, typeFrom(Constants.HTTP_RESPONSE_TYPE)),
+                new Parameter(Constants.ON_FAIL_ERROR_VAR_REF, BAL_ERROR_TYPE));
+        Function function = new Function(Constants.FUNC_NAME_INTERCEPT_RESPONSE_ERROR, parameters,
+                typeFrom(Constants.HTTP_RESOURCE_RETURN_TYPE_DEFAULT), body);
+        String className = Constants.RESPONSE_ERROR_INTERCEPTOR_CLASS_TEMPLATE
+                .formatted(ctx.projectCtx.counters.responseErrorInterceptorCount++);
+        return new HTTPInterceptor.ResponseErrorInterceptor(className, new Remote(function));
+    }
+
+    private static HTTPInterceptor genResponseInterceptor(Context ctx) {
+        List<Statement> body = new ArrayList<>();
+        body.add(stmtFrom("Context %s = {%s: {%s: new, %s: %s}};".formatted(Constants.CONTEXT_REFERENCE,
+                Constants.INBOUND_PROPERTIES_REF, Constants.HTTP_REQUEST_REF, Constants.HTTP_RESPONSE_REF,
+                Constants.HTTP_RESPONSE_REF)));
+        body.add(stmtFrom("%s.%s.setPayload(%s.payload);".formatted(Constants.INBOUND_PROPERTIES_FIELD_ACCESS,
+                Constants.HTTP_RESPONSE_REF, Constants.CONTEXT_REFERENCE)));
+        body.add(stmtFrom("return %s;".formatted(Constants.HTTP_RESPONSE_REF)));
+
+        List<Parameter> parameters = List.of(
+                new Parameter(Constants.HTTP_REQUEST_CONTEXT_REF, typeFrom(Constants.HTTP_REQUEST_CONTEXT_TYPE)),
+                new Parameter(Constants.HTTP_RESPONSE_REF, typeFrom(Constants.HTTP_RESPONSE_TYPE)));
+        Function function = new Function(Constants.FUNC_NAME_INTERCEPT_RESPONSE, parameters,
+                typeFrom(Constants.HTTP_RESOURCE_RETURN_TYPE_DEFAULT), body);
+        String className = Constants.RESPONSE_INTERCEPTOR_CLASS_TEMPLATE
+                .formatted(ctx.projectCtx.counters.responseInterceptorCount++);
+        return new HTTPInterceptor.ResponseInterceptor(className, new Remote(function));
     }
 
     public static List<ModuleTypeDef> createContextTypeDefns(Context ctx) {
@@ -492,7 +541,8 @@ public class MuleToBalConverter {
             throw new IllegalStateException();
         }
 
-        return new Service(basePath, listenerRef, resources, comment);
+        return new Service(basePath, List.of(listenerRef), Optional.empty(), resources, List.of(), List.of(),
+                List.of(), new ArrayList<>(), Optional.ofNullable(comment));
     }
 
     private static String getInboundPropInitValue(Context ctx, List<String> pathParams) {

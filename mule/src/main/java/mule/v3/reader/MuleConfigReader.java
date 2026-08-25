@@ -569,7 +569,14 @@ public class MuleConfigReader {
         String resourcePath = element.getAttribute("path");
         String[] allowedMethods = Arrays.stream(getAllowedMethods(element.getAttribute("allowedMethods")))
                 .map(String::toLowerCase).toArray(String[]::new);
-        return new HttpListener(configRef, resourcePath, allowedMethods);
+        boolean hasResponse = false;
+        boolean hasErrorResponse = false;
+        while (muleElement.peekChild() != null) {
+            String tagName = muleElement.consumeChild().getElement().getTagName();
+            hasResponse |= "http:response-builder".equals(tagName);
+            hasErrorResponse |= "http:error-response-builder".equals(tagName);
+        }
+        return new HttpListener(configRef, resourcePath, allowedMethods, hasResponse, hasErrorResponse);
     }
 
     private static HttpRequest readHttpRequest(Context ctx, MuleElement muleElement) {

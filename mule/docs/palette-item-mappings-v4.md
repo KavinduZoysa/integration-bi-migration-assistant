@@ -2,6 +2,7 @@
 
 # Supported Mule 4.x Components
 
+- [Apikit Router](palette-item-mappings-v4.md#apikit-router)
 - [Async](palette-item-mappings-v4.md#async)
 - [Choice](palette-item-mappings-v4.md#choice)
 - [Config Property Access](palette-item-mappings-v4.md#config-property-access)
@@ -35,6 +36,551 @@
 # Sample Input and Output (Mule 4.x)
 
 The `mule-to-ballerina-migration-assistant` project includes sample input and output files for Mule 4.x to demonstrate the conversion process. These samples are located in the `src/test/resources/mule/v4/blocks` directory.
+
+## Apikit Router
+
+- ### Error Handlers
+
+**Input (error_handlers.xml):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd">
+
+    <http:listener-config name="listener-config" doc:name="HTTP Listener">
+        <http:listener-connection host="0.0.0.0" port="8081" />
+    </http:listener-config>
+
+    <apikit:config name="api-config" api="api/api.raml" outboundHeadersMapName="outboundHeaders"
+                   httpStatusVarName="httpStatus" />
+
+    <flow name="api-main">
+        <http:listener config-ref="listener-config" path="/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="api-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:BAD_REQUEST">
+                <set-variable variableName="httpStatus" value="400" />
+                <set-payload value='{"message":"Bad request"}' mimeType="application/json" />
+            </on-error-propagate>
+            <on-error-continue type="APIKIT:NOT_FOUND">
+                <set-variable variableName="httpStatus" value="404" />
+                <set-payload value='{"message":"Resource not found"}' mimeType="application/json" />
+            </on-error-continue>
+            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+                <set-variable variableName="httpStatus" value="405" />
+                <set-payload value='{"message":"Method not allowed"}' mimeType="application/json" />
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
+                <set-variable variableName="httpStatus" value="406" />
+                <set-payload value='{"message":"Not acceptable"}' mimeType="application/json" />
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <set-variable variableName="httpStatus" value="415" />
+                <set-payload value='{"message":"Unsupported media type"}' mimeType="application/json" />
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
+                <set-variable variableName="httpStatus" value="501" />
+                <set-payload value='{"message":"Not implemented"}' mimeType="application/json" />
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+
+    <flow name="get:\orders\(id):api-config">
+        <logger level="INFO" message="Get order" />
+    </flow>
+
+    <flow name="post:\orders:api-config">
+        <logger level="INFO" message="Create order" />
+    </flow>
+</mule>
+
+```
+**Output (error_handlers.bal):**
+```ballerina
+import ballerina/http;
+import ballerina/log;
+
+public type Vars record {|
+    string httpStatus?;
+|};
+
+public type Attributes record {|
+    http:Request request?;
+    http:Response response?;
+    map<string> uriParams = {};
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Vars vars = {};
+    Attributes attributes;
+|};
+
+public listener http:Listener listener\-config = new (8081);
+
+service http:InterceptableService / on listener\-config {
+    function init() returns error? {
+    }
+
+    public function createInterceptors() returns [MuleResponseErrorInterceptor0, MuleResponseInterceptor0] {
+        return [new MuleResponseErrorInterceptor0(), new MuleResponseInterceptor0()];
+    }
+
+    resource function default [string... path](http:Request request) returns http:Response|error {
+        return error("APIKIT:NOT_FOUND");
+    }
+
+    resource function get orders/[string id](http:Request request) returns http:Response|error {
+        Context ctx = {attributes: {request, response: new, uriParams: {id}}};
+        log:printInfo("Get order");
+
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return <http:Response>ctx.attributes.response;
+    }
+
+    resource function post orders(http:Request request) returns http:Response|error {
+        Context ctx = {attributes: {request, response: new}};
+        log:printInfo("Create order");
+
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return <http:Response>ctx.attributes.response;
+    }
+}
+
+service class MuleResponseErrorInterceptor0 {
+    *http:ResponseErrorInterceptor;
+
+    remote function interceptResponseError(http:RequestContext requestContext, http:Response interceptedResponse, error err) returns http:Response|error {
+        Context ctx = {attributes: {response: interceptedResponse}};
+        // TODO: if conditions may require some manual adjustments
+        if err is "APIKIT:BAD_REQUEST" {
+
+            // on-error-propagate
+
+            ctx.vars.httpStatus = "400";
+
+            // set payload
+
+            string payload6 = "{\"message\":\"Bad request\"}";
+            ctx.payload = payload6;
+            http:Response response = <http:Response>ctx.attributes.response;
+            response.statusCode = 500;
+        } else if err is "APIKIT:NOT_FOUND" {
+            // on-error-continue
+            ctx.vars.httpStatus = "404";
+
+            // set payload
+            string payload7 = "{\"message\":\"Resource not found\"}";
+            ctx.payload = payload7;
+        } else if err is "APIKIT:METHOD_NOT_ALLOWED" {
+            // on-error-propagate
+            ctx.vars.httpStatus = "405";
+
+            // set payload
+            string payload8 = "{\"message\":\"Method not allowed\"}";
+            ctx.payload = payload8;
+            http:Response response = <http:Response>ctx.attributes.response;
+            response.statusCode = 500;
+        } else if err is "APIKIT:NOT_ACCEPTABLE" {
+            // on-error-propagate
+            ctx.vars.httpStatus = "406";
+
+            // set payload
+            string payload9 = "{\"message\":\"Not acceptable\"}";
+            ctx.payload = payload9;
+            http:Response response = <http:Response>ctx.attributes.response;
+            response.statusCode = 500;
+        } else if err is "APIKIT:UNSUPPORTED_MEDIA_TYPE" {
+            // on-error-propagate
+            ctx.vars.httpStatus = "415";
+
+            // set payload
+            string payload10 = "{\"message\":\"Unsupported media type\"}";
+            ctx.payload = payload10;
+            http:Response response = <http:Response>ctx.attributes.response;
+            response.statusCode = 500;
+        } else if err is "APIKIT:NOT_IMPLEMENTED" {
+            // on-error-propagate
+            ctx.vars.httpStatus = "501";
+
+            // set payload
+            string payload11 = "{\"message\":\"Not implemented\"}";
+            ctx.payload = payload11;
+            http:Response response = <http:Response>ctx.attributes.response;
+            response.statusCode = 500;
+        }
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return <http:Response>ctx.attributes.response;
+    }
+}
+
+service class MuleResponseInterceptor0 {
+    *http:ResponseInterceptor;
+
+    remote function interceptResponse(http:RequestContext requestContext, http:Response response) returns http:Response|error {
+        Context ctx = {attributes: {response: response}};
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return response;
+    }
+}
+
+```
+
+- ### Multiple Allowed Methods
+
+**Input (multiple_allowed_methods.xml):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd">
+    <http:listener-config name="listener-config" doc:name="HTTP Listener">
+        <http:listener-connection host="0.0.0.0" port="8080"/>
+    </http:listener-config>
+    <apikit:config name="api-config" api="api.raml"/>
+
+    <flow name="api-main">
+        <http:listener config-ref="listener-config" path="/*" allowedMethods="GET, POST"/>
+        <apikit:router config-ref="api-config"/>
+    </flow>
+
+    <flow name="get:\orders\(id):api-config">
+        <logger level="INFO" message="Get order"/>
+    </flow>
+    <flow name="post:\orders:api-config">
+        <logger level="INFO" message="Create order"/>
+    </flow>
+</mule>
+
+```
+**Output (multiple_allowed_methods.bal):**
+```ballerina
+import ballerina/http;
+import ballerina/log;
+
+public type Attributes record {|
+    http:Request request?;
+    http:Response response?;
+    map<string> uriParams = {};
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Attributes attributes;
+|};
+
+public listener http:Listener listener\-config = new (8080);
+
+service / on listener\-config {
+    function init() returns error? {
+    }
+
+    resource function get [string... path](http:Request request) returns http:Response|error {
+        return error("APIKIT:NOT_FOUND");
+    }
+
+    resource function post [string... path](http:Request request) returns http:Response|error {
+        return error("APIKIT:NOT_FOUND");
+    }
+
+    resource function get orders/[string id](http:Request request) returns http:Response|error {
+        Context ctx = {attributes: {request, response: new, uriParams: {id}}};
+        log:printInfo("Get order");
+
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return <http:Response>ctx.attributes.response;
+    }
+
+    resource function post orders(http:Request request) returns http:Response|error {
+        Context ctx = {attributes: {request, response: new}};
+        log:printInfo("Create order");
+
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return <http:Response>ctx.attributes.response;
+    }
+}
+
+```
+
+- ### No Allowed Methods
+
+**Input (no_allowed_methods.xml):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd">
+    <http:listener-config name="listener-config" doc:name="HTTP Listener">
+        <http:listener-connection host="0.0.0.0" port="8080"/>
+    </http:listener-config>
+    <apikit:config name="api-config" api="api.raml"/>
+
+    <flow name="api-main">
+        <http:listener config-ref="listener-config" path="/*"/>
+        <apikit:router config-ref="api-config"/>
+    </flow>
+
+    <flow name="get:\orders\(id):api-config">
+        <logger level="INFO" message="Get order"/>
+    </flow>
+    <flow name="post:\orders:api-config">
+        <logger level="INFO" message="Create order"/>
+    </flow>
+</mule>
+
+```
+**Output (no_allowed_methods.bal):**
+```ballerina
+import ballerina/http;
+import ballerina/log;
+
+public type Attributes record {|
+    http:Request request?;
+    http:Response response?;
+    map<string> uriParams = {};
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Attributes attributes;
+|};
+
+public listener http:Listener listener\-config = new (8080);
+
+service / on listener\-config {
+    function init() returns error? {
+    }
+
+    resource function default [string... path](http:Request request) returns http:Response|error {
+        return error("APIKIT:NOT_FOUND");
+    }
+
+    resource function get orders/[string id](http:Request request) returns http:Response|error {
+        Context ctx = {attributes: {request, response: new, uriParams: {id}}};
+        log:printInfo("Get order");
+
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return <http:Response>ctx.attributes.response;
+    }
+
+    resource function post orders(http:Request request) returns http:Response|error {
+        Context ctx = {attributes: {request, response: new}};
+        log:printInfo("Create order");
+
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return <http:Response>ctx.attributes.response;
+    }
+}
+
+```
+
+- ### Response Bodies With Any Error Handler
+
+**Input (response_bodies_with_any_error_handler.xml):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd">
+
+    <http:listener-config name="listener-config" doc:name="HTTP Listener">
+        <http:listener-connection host="0.0.0.0" port="8081" />
+    </http:listener-config>
+
+    <apikit:config name="api-config" api="api/api.raml" />
+
+    <flow name="api-main">
+        <http:listener config-ref="listener-config" path="/*">
+            <http:response>
+                <http:body>#["B2"]</http:body>
+            </http:response>
+            <http:error-response>
+                <http:body>#["B1"]</http:body>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="api-config" />
+        <set-payload value='#["B2"]' />
+        <error-handler>
+            <on-error-continue type="ANY">
+                <logger level="INFO" message="Handle any error" />
+            </on-error-continue>
+        </error-handler>
+    </flow>
+
+    <flow name="get:\orders\(id):api-config">
+        <set-payload value='#["B3"]' />
+    </flow>
+</mule>
+
+```
+**Output (response_bodies_with_any_error_handler.bal):**
+```ballerina
+import ballerina/http;
+import ballerina/log;
+
+public type Attributes record {|
+    http:Request request?;
+    http:Response response?;
+    map<string> uriParams = {};
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Attributes attributes;
+|};
+
+public listener http:Listener listener\-config = new (8081);
+
+service http:InterceptableService / on listener\-config {
+    function init() returns error? {
+    }
+
+    public function createInterceptors() returns [MuleResponseErrorInterceptor0, MuleResponseInterceptor0] {
+        return [new MuleResponseErrorInterceptor0(), new MuleResponseInterceptor0()];
+    }
+
+    resource function default [string... path](http:Request request) returns http:Response|error {
+        return error("APIKIT:NOT_FOUND");
+    }
+
+    resource function get orders/[string id](http:Request request) returns http:Response|error {
+        Context ctx = {attributes: {request, response: new, uriParams: {id}}};
+
+        // set payload
+        string payload1 = "B3";
+        ctx.payload = payload1;
+
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return <http:Response>ctx.attributes.response;
+    }
+}
+
+service class MuleResponseErrorInterceptor0 {
+    *http:ResponseErrorInterceptor;
+
+    remote function interceptResponseError(http:RequestContext requestContext, http:Response interceptedResponse, error err) returns http:Response|error {
+        Context ctx = {attributes: {response: interceptedResponse}};
+        // on-error-continue
+        log:printInfo("Handle any error");
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return <http:Response>ctx.attributes.response;
+    }
+}
+
+service class MuleResponseInterceptor0 {
+    *http:ResponseInterceptor;
+
+    remote function interceptResponse(http:RequestContext requestContext, http:Response response) returns http:Response|error {
+        Context ctx = {attributes: {response: response}};
+
+        // set payload
+        string payload0 = "B2";
+        ctx.payload = payload0;
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return response;
+    }
+}
+
+```
+
+- ### Single Allowed Method
+
+**Input (single_allowed_method.xml):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd">
+    <http:listener-config name="listener-config" doc:name="HTTP Listener">
+        <http:listener-connection host="0.0.0.0" port="8080"/>
+    </http:listener-config>
+    <apikit:config name="api-config" api="api.raml"/>
+
+    <flow name="api-main">
+        <http:listener config-ref="listener-config" path="/*" allowedMethods="GET"/>
+        <apikit:router config-ref="api-config"/>
+    </flow>
+
+    <flow name="get:\orders\(id):api-config">
+        <logger level="INFO" message="Get order"/>
+    </flow>
+</mule>
+
+```
+**Output (single_allowed_method.bal):**
+```ballerina
+import ballerina/http;
+import ballerina/log;
+
+public type Attributes record {|
+    http:Request request?;
+    http:Response response?;
+    map<string> uriParams = {};
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Attributes attributes;
+|};
+
+public listener http:Listener listener\-config = new (8080);
+
+service / on listener\-config {
+    function init() returns error? {
+    }
+
+    resource function get [string... path](http:Request request) returns http:Response|error {
+        return error("APIKIT:NOT_FOUND");
+    }
+
+    resource function get orders/[string id](http:Request request) returns http:Response|error {
+        Context ctx = {attributes: {request, response: new, uriParams: {id}}};
+        log:printInfo("Get order");
+
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return <http:Response>ctx.attributes.response;
+    }
+}
+
+```
 
 ## Async
 
@@ -3399,34 +3945,10 @@ service / on http\-listener\-config {
     }
 
     resource function default api(http:Request request) returns http:Response|error {
-        Context ctx = {attributes: {request, response: new}};
-        http:Client apiKitClient = check new ("http://localhost:8081");
-        string apiKitRedirectPath = "/apikit0/" + request.rawPath.substring("/".length() + "api".length());
-        match request.method {
-            "GET" => {
-                ctx.payload = check apiKitClient->get(apiKitRedirectPath);
-            }
-            "POST" => {
-                ctx.payload = check apiKitClient->post(apiKitRedirectPath, check request.getJsonPayload());
-            }
-            "PUT" => {
-                ctx.payload = check apiKitClient->put(apiKitRedirectPath, check request.getJsonPayload());
-            }
-            "DELETE" => {
-                ctx.payload = check apiKitClient->delete(apiKitRedirectPath, check request.getJsonPayload());
-            }
-            _ => {
-                panic error("Method not allowed");
-            }
-        }
-
-        // TODO: try to directly call the endpoints generated for the api kit
-
-        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
-        return <http:Response>ctx.attributes.response;
+        return error("APIKIT:NOT_FOUND");
     }
 
-    resource function post apikit0/orders(http:Request request) returns http:Response|error {
+    resource function post orders(http:Request request) returns http:Response|error {
         Context ctx = {attributes: {request, response: new}};
         log:printInfo("Processing new order");
         jms:MapMessage jmsMessage0 = {

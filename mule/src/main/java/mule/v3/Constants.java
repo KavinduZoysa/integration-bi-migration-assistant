@@ -56,6 +56,7 @@ public class Constants {
     public static final String INBOUND_PROPERTIES_REF = "inboundProperties";
     public static final String HTTP_REQUEST_REF = "request";
     public static final String HTTP_RESPONSE_REF = "response";
+    public static final String HTTP_REQUEST_CONTEXT_REF = "requestContext";
     public static final String PAYLOAD_REF = "payload";
     public static final String URI_PARAMS_REF = "uriParams";
     public static final String FLOW_VARS_FIELD_ACCESS = CONTEXT_REFERENCE + "." + FLOW_VARS_REF;
@@ -67,6 +68,10 @@ public class Constants {
     public static final String ON_FAIL_ERROR_VAR_REF = "e";
     public static final String VAR_ITERATOR = "_iterator_";
     public static final String FUNC_NAME_HTTP_ENDPOINT_TEMPLATE = "invokeEndPoint%s";
+    public static final String FUNC_NAME_INTERCEPT_RESPONSE = "interceptResponse";
+    public static final String FUNC_NAME_INTERCEPT_RESPONSE_ERROR = "interceptResponseError";
+    public static final String RESPONSE_INTERCEPTOR_CLASS_TEMPLATE = "MuleResponseInterceptor%s";
+    public static final String RESPONSE_ERROR_INTERCEPTOR_CLASS_TEMPLATE = "MuleResponseErrorInterceptor%s";
     public static final String VAR_DB_STREAM_TEMPLATE = "dbStream%s";
     public static final String VAR_DB_QUERY_TEMPLATE = "dbQuery%s";
     public static final String VAR_DB_SELECT_TEMPLATE = "dbSelect%s";
@@ -88,6 +93,7 @@ public class Constants {
     // Types
     public static final String HTTP_RESPONSE_TYPE = "http:Response";
     public static final String HTTP_REQUEST_TYPE = "http:Request";
+    public static final String HTTP_REQUEST_CONTEXT_TYPE = "http:RequestContext";
     public static final String HTTP_RESOURCE_RETURN_TYPE_DEFAULT = HTTP_RESPONSE_TYPE + "|error";
     public static final String MYSQL_CLIENT_TYPE = "mysql:Client";
     public static final String ORACLEDB_CLIENT_TYPE = "oracledb:Client";

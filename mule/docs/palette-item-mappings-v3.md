@@ -1633,6 +1633,219 @@ service /mule3 on config {
 
 ```
 
+- ### Listener With Both Response Builders
+
+**Input (listener_with_both_response_builders.xml):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:spring="http://www.springframework.org/schema/beans"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+    <http:listener-config name="config" host="0.0.0.0" port="8081" basePath="/mule3" doc:name="HTTP Listener Configuration"/>
+    <flow name="demoFlow">
+        <http:listener config-ref="config" path="/demo" allowedMethods="GET" doc:name="HTTP">
+            <http:response-builder statusCode="200"/>
+            <http:error-response-builder statusCode="500"/>
+        </http:listener>
+        <logger message="xxx: logger invoked" level="INFO" doc:name="Logger"/>
+    </flow>
+</mule>
+
+```
+**Output (listener_with_both_response_builders.bal):**
+```ballerina
+import ballerina/http;
+import ballerina/log;
+
+public type InboundProperties record {|
+    http:Request request;
+    http:Response response;
+    map<string> uriParams = {};
+|};
+
+public type Context record {|
+    anydata payload = ();
+    InboundProperties inboundProperties;
+|};
+
+public listener http:Listener config = new (8081);
+
+service http:InterceptableService /mule3 on config {
+    public function createInterceptors() returns [MuleResponseErrorInterceptor0, MuleResponseInterceptor0] {
+        return [new MuleResponseErrorInterceptor0(), new MuleResponseInterceptor0()];
+    }
+
+    resource function get demo(http:Request request) returns http:Response|error {
+        Context ctx = {inboundProperties: {request, response: new}};
+        log:printInfo("xxx: logger invoked");
+
+        ctx.inboundProperties.response.setPayload(ctx.payload);
+        return ctx.inboundProperties.response;
+    }
+}
+
+service class MuleResponseErrorInterceptor0 {
+    *http:ResponseErrorInterceptor;
+
+    remote function interceptResponseError(http:RequestContext requestContext, http:Response interceptedResponse, error e) returns http:Response|error {
+        Context ctx = {inboundProperties: {request: new, response: interceptedResponse}};
+        ctx.inboundProperties.response.setPayload(ctx.payload);
+        return ctx.inboundProperties.response;
+    }
+}
+
+service class MuleResponseInterceptor0 {
+    *http:ResponseInterceptor;
+
+    remote function interceptResponse(http:RequestContext requestContext, http:Response response) returns http:Response|error {
+        Context ctx = {inboundProperties: {request: new, response: response}};
+        ctx.inboundProperties.response.setPayload(ctx.payload);
+        return response;
+    }
+}
+
+```
+
+- ### Listener With Error Response Builder
+
+**Input (listener_with_error_response_builder.xml):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:spring="http://www.springframework.org/schema/beans"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+    <http:listener-config name="config" host="0.0.0.0" port="8081" basePath="/mule3" doc:name="HTTP Listener Configuration"/>
+    <flow name="demoFlow">
+        <http:listener config-ref="config" path="/demo" allowedMethods="GET" doc:name="HTTP">
+            <http:error-response-builder statusCode="500">
+                <http:header headerName="Content-Type" value="application/json"/>
+            </http:error-response-builder>
+        </http:listener>
+        <logger message="xxx: logger invoked" level="INFO" doc:name="Logger"/>
+    </flow>
+</mule>
+
+```
+**Output (listener_with_error_response_builder.bal):**
+```ballerina
+import ballerina/http;
+import ballerina/log;
+
+public type InboundProperties record {|
+    http:Request request;
+    http:Response response;
+    map<string> uriParams = {};
+|};
+
+public type Context record {|
+    anydata payload = ();
+    InboundProperties inboundProperties;
+|};
+
+public listener http:Listener config = new (8081);
+
+service http:InterceptableService /mule3 on config {
+    public function createInterceptors() returns [MuleResponseErrorInterceptor0] {
+        return [new MuleResponseErrorInterceptor0()];
+    }
+
+    resource function get demo(http:Request request) returns http:Response|error {
+        Context ctx = {inboundProperties: {request, response: new}};
+        log:printInfo("xxx: logger invoked");
+
+        ctx.inboundProperties.response.setPayload(ctx.payload);
+        return ctx.inboundProperties.response;
+    }
+}
+
+service class MuleResponseErrorInterceptor0 {
+    *http:ResponseErrorInterceptor;
+
+    remote function interceptResponseError(http:RequestContext requestContext, http:Response interceptedResponse, error e) returns http:Response|error {
+        Context ctx = {inboundProperties: {request: new, response: interceptedResponse}};
+        ctx.inboundProperties.response.setPayload(ctx.payload);
+        return ctx.inboundProperties.response;
+    }
+}
+
+```
+
+- ### Listener With Response Builder
+
+**Input (listener_with_response_builder.xml):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:spring="http://www.springframework.org/schema/beans"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+    <http:listener-config name="config" host="0.0.0.0" port="8081" basePath="/mule3" doc:name="HTTP Listener Configuration"/>
+    <flow name="demoFlow">
+        <http:listener config-ref="config" path="/demo" allowedMethods="GET" doc:name="HTTP">
+            <http:response-builder statusCode="200">
+                <http:header headerName="Content-Type" value="application/json"/>
+            </http:response-builder>
+        </http:listener>
+        <logger message="xxx: logger invoked" level="INFO" doc:name="Logger"/>
+    </flow>
+</mule>
+
+```
+**Output (listener_with_response_builder.bal):**
+```ballerina
+import ballerina/http;
+import ballerina/log;
+
+public type InboundProperties record {|
+    http:Request request;
+    http:Response response;
+    map<string> uriParams = {};
+|};
+
+public type Context record {|
+    anydata payload = ();
+    InboundProperties inboundProperties;
+|};
+
+public listener http:Listener config = new (8081);
+
+service http:InterceptableService /mule3 on config {
+    public function createInterceptors() returns [MuleResponseInterceptor0] {
+        return [new MuleResponseInterceptor0()];
+    }
+
+    resource function get demo(http:Request request) returns http:Response|error {
+        Context ctx = {inboundProperties: {request, response: new}};
+        log:printInfo("xxx: logger invoked");
+
+        ctx.inboundProperties.response.setPayload(ctx.payload);
+        return ctx.inboundProperties.response;
+    }
+}
+
+service class MuleResponseInterceptor0 {
+    *http:ResponseInterceptor;
+
+    remote function interceptResponse(http:RequestContext requestContext, http:Response response) returns http:Response|error {
+        Context ctx = {inboundProperties: {request: new, response: response}};
+        ctx.inboundProperties.response.setPayload(ctx.payload);
+        return response;
+    }
+}
+
+```
+
 - ### Missing Listener Config Reference
 
 **Input (missing_listener_config_reference.xml):**
@@ -1826,6 +2039,56 @@ public listener http:Listener config = new (8081);
 
 service /mule\-3 on config {
     resource function get v\-1/demo/'1\.0/main\-contract/'new(http:Request request) returns http:Response|error {
+        Context ctx = {inboundProperties: {request, response: new}};
+        log:printInfo("xxx: logger invoked");
+
+        ctx.inboundProperties.response.setPayload(ctx.payload);
+        return ctx.inboundProperties.response;
+    }
+}
+
+```
+
+- ### Wildcard Resource Path
+
+**Input (wildcard_resource_path.xml):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:spring="http://www.springframework.org/schema/beans"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+    <http:listener-config name="config" host="0.0.0.0" port="8081" basePath="/mule3" doc:name="HTTP Listener Configuration"/>
+    <flow name="demoFlow">
+        <http:listener config-ref="config" path="/demo/*" allowedMethods="GET" doc:name="HTTP"/>
+        <logger message="xxx: logger invoked" level="INFO" doc:name="Logger"/>
+    </flow>
+</mule>
+
+```
+**Output (wildcard_resource_path.bal):**
+```ballerina
+import ballerina/http;
+import ballerina/log;
+
+public type InboundProperties record {|
+    http:Request request;
+    http:Response response;
+    map<string> uriParams = {};
+|};
+
+public type Context record {|
+    anydata payload = ();
+    InboundProperties inboundProperties;
+|};
+
+public listener http:Listener config = new (8081);
+
+service /mule3 on config {
+    resource function get demo/[string... path](http:Request request) returns http:Response|error {
         Context ctx = {inboundProperties: {request, response: new}};
         log:printInfo("xxx: logger invoked");
 

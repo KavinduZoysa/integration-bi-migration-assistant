@@ -52,6 +52,9 @@ public class ConversionUtils {
     public static String getBallerinaResourcePath(Context ctx, String path, List<String> pathParams) {
         List<String> list = Arrays.stream(path.split("/")).filter(s -> !s.isEmpty())
                 .map(s -> {
+                    if ("*".equals(s)) {
+                        return "[string... path]";
+                    }
                     if (s.startsWith("{") && s.endsWith("}")) {
                         // We come here for mule path params. e.g. foo/{bar}/baz
                         String pathParamName = s.substring(1, s.length() - 1);
