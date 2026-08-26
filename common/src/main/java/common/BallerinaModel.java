@@ -33,6 +33,8 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static common.BallerinaModel.Expression.BallerinaExpression;
+import static common.BallerinaModel.Expression.MappingConstructor;
+import static common.BallerinaModel.Expression.MappingConstructor.MappingField;
 import static common.BallerinaModel.Expression.StringConstant;
 import static common.BallerinaModel.Expression.VariableReference;
 import static common.BallerinaModel.Statement.Comment;
@@ -424,19 +426,27 @@ public record BallerinaModel(DefaultPackage defaultPackage, List<Module> modules
             }
         }
 
-        record HTTPListener(String name, Expression port, Optional<Expression> host) implements Listener {
+        record HTTPListener(String name, Expression port, Optional<Expression> host,
+                             Optional<Expression> secureSocket) implements Listener {
+
+            public HTTPListener(String name, Expression port, Optional<Expression> host) {
+                this(name, port, host, Optional.empty());
+            }
 
             public HTTPListener(String name, String port, String host) {
                 this(name, ConversionUtils.exprFrom(port),
-                        host.equals("0.0.0.0") ? Optional.empty() : Optional.of(new StringConstant(host)));
+                        host.equals("0.0.0.0") ? Optional.empty() : Optional.of(new StringConstant(host)),
+                        Optional.empty());
             }
 
             @Override
             @NotNull
             public String toString() {
-                String argList;
-                argList = host.map(expression -> "(%s, {host: %s})".formatted(port, expression))
-                        .orElseGet(() -> "(%s)".formatted(port));
+                List<MappingField> configFields = new ArrayList<>();
+                host.ifPresent(expression -> configFields.add(new MappingField("host", expression)));
+                secureSocket.ifPresent(expression -> configFields.add(new MappingField("secureSocket", expression)));
+                String argList = configFields.isEmpty() ? "(%s)".formatted(port)
+                        : "(%s, %s)".formatted(port, new MappingConstructor(configFields));
                 return "public listener http:Listener %s = new %s;".formatted(name, argList);
             }
 

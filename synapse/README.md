@@ -50,7 +50,9 @@ The migration tool currently supports the following Synapse elements:
 | `<api>` | HTTP service |
 | `<resource>` | resource function |
 | `<inSequence>` | resource function body |
-| `<inboundEndpoint>` (`protocol="http"`) | dedicated `http:Listener` (port from the `inbound.http.port` parameter) plus a wildcard service forwarding every request to the referenced `sequence` |
+| `<inboundEndpoint>` (`protocol="http"`/`"https"`) | dedicated `http:Listener` (port from the `inbound.http.port` parameter) plus a wildcard service forwarding every request to the referenced `sequence` |
+| `<inboundEndpoint>` (`protocol="jms"`) | dedicated `jms:Listener` (from `java.naming.factory.initial`, `java.naming.provider.url`, `transport.jms.Destination`, `transport.jms.UserName`/`Password`) plus a service with a single `onMessage` remote function forwarding every message to the referenced `sequence` |
+| `<inboundEndpoint>` (`protocol="file"`) | dedicated `file:Listener` (from `transport.vfs.FileURI`) plus a service with a single `onCreate` remote function forwarding every discovered file to the referenced `sequence` |
 
 ### Mediators
 
@@ -73,11 +75,15 @@ translation is surfaced as a TODO so the generated package still builds around t
   applied — the TODO flags that it needs manual restructuring).
 - **Unsupported top-level artifacts** (e.g. `<proxy>`, `<endpoint>`) are reported in
   `migration_report.md` (they have no Ballerina construct to host an inline comment).
-- **`<inboundEndpoint>` protocols other than `http`/`https`** (e.g. `jms`, `file`, `ws`, a `class=…`
-  custom Java endpoint) have no generated listener equivalent yet and are reported in
-  `migration_report.md` the same way an unsupported top-level artifact is. An `inboundEndpoint`
-  parameter other than `inbound.http.port`/`inbound.http.host` is likewise reported rather than
-  silently ignored.
+- **`<inboundEndpoint>` protocols other than `http`, `https`, `jms`, `file`** (e.g. `ws`, `kafka`,
+  `mqtt`, a `class=…` custom Java endpoint) have no generated listener equivalent yet and are reported
+  in `migration_report.md` the same way an unsupported top-level artifact is. An `inboundEndpoint`
+  parameter not mapped by its protocol (e.g. `transport.jms.ConnectionFactoryJNDIName`, `interval`,
+  `transport.vfs.ActionAfterProcess`) is likewise reported rather than silently ignored.
+- **A `<respond/>` mediator reached while converting a `jms`/`file` inbound endpoint's sequence** (there
+  is no reply transport on these protocols) becomes an inline `// TODO` comment and is recorded in the
+  report, instead of being converted; the default/implicit fault handler for these protocols only logs
+  the error rather than also responding.
 - **Unsupported `<property>` scopes / `remove` actions** and **unresolved `<sequence key="…"/>`
   references** become inline `// TODO` comments and are recorded in the report.
 
@@ -134,4 +140,15 @@ a case, drop `synapse/<Name>/<Name>.xml` and the expected `ballerina/<Name>` pac
 - The response payload is set with a generic setter rather than media-type-specific ones (e.g. JSON/text/XML setters).
 - The shared HTTP listener every `<api>` service binds to is fixed (port `8080`) and is not derived
   from the source artifact. An `<inboundEndpoint>` is the exception: it gets its own dedicated
-  `http:Listener`, with the port read from its `inbound.http.port` parameter.
+  listener, e.g. an `http`/`https` one with the port read from its `inbound.http.port` parameter.
+- `https` inbound endpoints model server-authentication TLS only: a `keystore` parameter becomes the
+  listener's `secureSocket.key`. Mutual TLS (`truststore`/`SSLVerifyClient`) and every other TLS-related
+  parameter (`HttpsProtocols`, `SSLProtocol`, `CertificateRevocationVerifier`) are reported as unsupported,
+  and an `https` endpoint with no `keystore` at all falls back to a plain, unencrypted `http:Listener`.
+- A `jms` inbound endpoint's generated `jms:Listener` always binds to a queue; a
+  `transport.jms.DestinationType="topic"` parameter is reported as unsupported and a queue listener is
+  still generated best-effort.
+- A named `<sequence>` shared between an `<api>` (or an `http`/`https` inbound endpoint) and a
+  `jms`/`file` inbound endpoint is converted once, independent of caller. A `<respond/>` inside such a
+  shared sequence's main body (as opposed to its fault path) is not caught by the jms/file
+  unsupported-respond check described above — verify manually if a sequence is reused this way.
