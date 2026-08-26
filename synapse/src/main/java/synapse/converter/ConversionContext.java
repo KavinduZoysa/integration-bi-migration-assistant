@@ -21,6 +21,7 @@ import common.BallerinaModel.Function;
 import common.BallerinaModel.Import;
 import common.BallerinaModel.Listener;
 import common.BallerinaModel.ModuleTypeDef;
+import common.BallerinaModel.ModuleVar;
 import common.BallerinaModel.Service;
 import org.jetbrains.annotations.NotNull;
 import synapse.converter.bir.mediators.classmediator.source.JavaSourceResolver;
@@ -65,6 +66,7 @@ public class ConversionContext {
     private final List<Function> functions = new ArrayList<>();
     private final List<ModuleTypeDef> records = new ArrayList<>();
     private final List<Listener> listeners = new ArrayList<>();
+    private final List<ModuleVar> moduleVars = new ArrayList<>();
 
     private final Map<String, SequenceMetadata> sequenceMetadata = new HashMap<>();
     private final Map<String, Set<Import>> importsByFile = new HashMap<>();
@@ -177,6 +179,22 @@ public class ConversionContext {
     @NotNull
     public List<Listener> listeners() {
         return listeners;
+    }
+
+    /**
+     * Registers a {@code configurable} module-level variable backing a listener setting that is inherently
+     * tied to the machine the config was authored on (a connection URL, credential, or filesystem path) so
+     * it can be overridden per deployment via {@code Config.toml} instead of requiring a source edit. Per-
+     * artifact output, like {@link #listeners()}: cleared by {@link #clearArtifactOutput()} once flushed.
+     */
+    public void addModuleVar(ModuleVar moduleVar) {
+        assert moduleVar != null : "moduleVar must not be null";
+        moduleVars.add(moduleVar);
+    }
+
+    @NotNull
+    public List<ModuleVar> moduleVars() {
+        return moduleVars;
     }
 
     public void addFunction(Function function) {
@@ -322,6 +340,7 @@ public class ConversionContext {
         functions.clear();
         records.clear();
         listeners.clear();
+        moduleVars.clear();
     }
 
     // Facts about a <sequence>, recorded once it has been converted, all falling out of the conversion

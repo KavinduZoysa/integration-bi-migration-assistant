@@ -14,7 +14,10 @@ service /mixed on httpListener {
     }
 }
 
-public listener http:Listener MixedInboundListener = new (8089);
+configurable int MixedInboundPort = 8089;
+configurable string MixedInboundHost = "0.0.0.0";
+
+public listener http:Listener MixedInboundListener = new (MixedInboundPort, {host: MixedInboundHost});
 
 service / on MixedInboundListener {
     resource function 'default [string... path](http:Caller caller, http:Request request) returns error? {

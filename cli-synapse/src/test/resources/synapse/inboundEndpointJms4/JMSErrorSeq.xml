@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence xmlns="http://ws.apache.org/ns/synapse" name="JMSErrorSeq">
+    <log category="ERROR">
+        <message>JMS error: ${properties.synapse.ERROR_CODE} - ${properties.synapse.ERROR_MESSAGE}</message>
+    </log>
+    <drop/>
+</sequence>

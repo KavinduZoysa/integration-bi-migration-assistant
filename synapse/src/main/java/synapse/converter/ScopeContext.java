@@ -42,6 +42,7 @@ public abstract class ScopeContext {
     private boolean contextParam;
     private boolean contextInitialized;
     private boolean responded;
+    private boolean supportsReply = true;
 
     protected ScopeContext(ConversionContext shared) {
         assert shared != null : "shared ConversionContext must not be null";
@@ -71,6 +72,16 @@ public abstract class ScopeContext {
      */
     public void initContext() {
         statements.add(new Statement.BallerinaStatement("Context ctx = {variables: {}, caller: caller};"));
+        setContextInitialized(true);
+    }
+
+    /**
+     * Declares the {@code Context ctx} local at the top of a resource body for a protocol with no
+     * {@code http:Caller} to seed it with (e.g. a jms/file inbound endpoint) — {@code ctx.caller} is left
+     * unset. See {@link #setSupportsReply(boolean)} for how such a resource also disables {@code respond}.
+     */
+    public void initContextWithoutCaller() {
+        statements.add(new Statement.BallerinaStatement("Context ctx = {variables: {}};"));
         setContextInitialized(true);
     }
 
@@ -137,5 +148,20 @@ public abstract class ScopeContext {
 
     public void setResponded(boolean responded) {
         this.responded = responded;
+    }
+
+    /**
+     * Whether this scope has a reply transport to respond on. {@code true} for an HTTP resource, whose
+     * {@code ctx.caller} is an {@code http:Caller}; {@code false} for a protocol with no reply transport
+     * (e.g. a jms/file inbound endpoint), where {@link synapse.converter.bir.mediators.RespondConverter}
+     * reports a {@code <respond/>} as unsupported instead of converting it, and the default fault handler
+     * only logs instead of also responding.
+     */
+    public boolean supportsReply() {
+        return supportsReply;
+    }
+
+    public void setSupportsReply(boolean supportsReply) {
+        this.supportsReply = supportsReply;
     }
 }

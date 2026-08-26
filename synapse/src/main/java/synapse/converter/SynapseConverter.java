@@ -25,6 +25,7 @@ import common.BallerinaModel.Import;
 import common.BallerinaModel.Listener;
 import common.BallerinaModel.Listener.HTTPListener;
 import common.BallerinaModel.ModuleTypeDef;
+import common.BallerinaModel.ModuleVar;
 import common.BallerinaModel.Parameter;
 import common.BallerinaModel.Service;
 import common.BallerinaModel.Statement;
@@ -89,7 +90,6 @@ public final class SynapseConverter {
             Kind.SEQUENCE, new SequenceConverter(),
             Kind.INBOUND_ENDPOINT, new InboundEndpointConverter());
 
-    private static final String LISTENER_NAME = "httpListener";
     private static final String DEFAULT_PORT = "8080";
     private static final String DEFAULT_HOST = "0.0.0.0";
     private static final String DEFAULT_ORG = "wso2";
@@ -422,72 +422,98 @@ public final class SynapseConverter {
 
     private static void writeArtifacts(Path targetDir, ConversionContext context,
                                        Map<Path, Set<Import>> writtenImports) throws IOException {
-        context.addImports(ConversionContext.MAIN_BAL_FILE, List.of(new Import("ballerina", "http")));
         Path mainBalFile = targetDir.resolve(ConversionContext.MAIN_BAL_FILE);
         List<Listener> listeners = new ArrayList<>();
         // The shared HTTP listener every <api> service binds to is declared once, the first round that
         // actually converts an <api>; an <inboundEndpoint>'s own dedicated listener (context.listeners())
         // is per-artifact output instead, so it is appended on whichever round actually introduces it.
         if (!context.isSharedListenerDeclared() && usesSharedListener(context.services())) {
-            listeners.add(new HTTPListener(LISTENER_NAME, DEFAULT_PORT, DEFAULT_HOST));
+            listeners.add(new HTTPListener(APIConverter.DEFAULT_LISTENER_REF, DEFAULT_PORT, DEFAULT_HOST));
             context.setSharedListenerDeclared(true);
         }
         listeners.addAll(context.listeners());
         if (!listeners.isEmpty()) {
             context.setAnyListenerWritten(true);
         }
+        // main.bal only needs ballerina/http when it actually declares an HTTP listener: a jms/file-only
+        // inbound endpoint's main.bal never references an http: type, so an unconditional import here
+        // would be an unused-import compile error.
+        if (listeners.stream().anyMatch(listener -> listener.type() == Listener.ListenerType.HTTP)) {
+            context.addImports(ConversionContext.MAIN_BAL_FILE, List.of(new Import("ballerina", "http")));
+        }
         writeToFile(mainBalFile, context.importsFor(ConversionContext.MAIN_BAL_FILE),
-                listeners, context.services(), List.of(), List.of(), writtenImports);
+                context.moduleVars(), listeners, context.services(), List.of(), List.of(), writtenImports);
         if (!context.functions().isEmpty()) {
             writeToFile(targetDir.resolve(ConversionContext.FUNCTIONS_BAL_FILE),
                     context.importsFor(ConversionContext.FUNCTIONS_BAL_FILE), List.of(),
-                    List.of(), context.functions(), List.of(), writtenImports);
+                    List.of(), List.of(), context.functions(), List.of(), writtenImports);
         }
         if (!context.records().isEmpty()) {
             writeToFile(targetDir.resolve(ConversionContext.TYPES_BAL_FILE),
                     context.importsFor(ConversionContext.TYPES_BAL_FILE), List.of(),
-                    List.of(), List.of(), context.records(), writtenImports);
+                    List.of(), List.of(), List.of(), context.records(), writtenImports);
         }
     }
 
     // Whether this round's services include one bound to the shared listener, as opposed to only
     // <inboundEndpoint> services, which bind to their own dedicated listener instead.
     private static boolean usesSharedListener(List<Service> services) {
-        return services.stream().anyMatch(service -> service.listenerRefs().contains(LISTENER_NAME));
+        return services.stream()
+                .anyMatch(service -> service.listenerRefs().contains(APIConverter.DEFAULT_LISTENER_REF));
     }
 
     // Guarantees the generated package always has at least one runnable HTTP listener, even when nothing
     // converted produced one of its own: falls back to the shared listener as a minimal skeleton.
     private static void ensureListenerSkeleton(ConversionContext context) {
         if (!context.isAnyListenerWritten()) {
-            context.addListener(new HTTPListener(LISTENER_NAME, DEFAULT_PORT, DEFAULT_HOST));
+            context.addListener(new HTTPListener(APIConverter.DEFAULT_LISTENER_REF, DEFAULT_PORT, DEFAULT_HOST));
         }
     }
 
-    private static void writeToFile(Path file, Set<Import> imports, List<Listener> listeners,
-                                    List<Service> services, List<Function> functions,
+    private static void writeToFile(Path file, Set<Import> imports, List<ModuleVar> moduleVars,
+                                    List<Listener> listeners, List<Service> services, List<Function> functions,
                                     List<ModuleTypeDef> records,
                                     Map<Path, Set<Import>> writtenImports) throws IOException {
-        appendConstructs(file, listeners, services, functions, records);
+        appendConstructs(file, moduleVars, listeners, services, functions, records);
         prependNewImports(file, imports, writtenImports);
     }
 
-    private static void appendConstructs(Path file, List<Listener> listeners, List<Service> services,
-                                         List<Function> functions, List<ModuleTypeDef> records)
+    private static void appendConstructs(Path file, List<ModuleVar> moduleVars, List<Listener> listeners,
+                                         List<Service> services, List<Function> functions,
+                                         List<ModuleTypeDef> records)
             throws IOException {
         boolean exists = Files.exists(file);
-        if (listeners.isEmpty() && services.isEmpty() && functions.isEmpty() && records.isEmpty()) {
+        if (moduleVars.isEmpty() && listeners.isEmpty() && services.isEmpty() && functions.isEmpty()
+                && records.isEmpty()) {
             return;
         }
         TextDocument document = new TextDocument(file.getFileName().toString(),
-                List.of(), records, List.of(), listeners,
+                List.of(), records, moduleVars, listeners,
                 services, functions, List.of(), List.of(), List.of());
-        String source = document.toSource();
+        String source = blankLineAfterConfigurableBlock(document.toSource());
         if (exists) {
             Files.writeString(file, System.lineSeparator() + source, StandardOpenOption.APPEND);
         } else {
             Files.writeString(file, source);
         }
+    }
+
+    private static String blankLineAfterConfigurableBlock(String source) {
+        String[] lines = source.split("\n", -1);
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            result.append(lines[i]);
+            boolean isLastLine = i == lines.length - 1;
+            if (!isLastLine) {
+                result.append("\n");
+            }
+            boolean endsConfigurableBlock = lines[i].strip().startsWith("configurable ") && !isLastLine
+                    && !lines[i + 1].isBlank() && !lines[i + 1].strip().startsWith("configurable ");
+            if (endsConfigurableBlock) {
+                result.append("\n");
+            }
+        }
+        return result.toString();
     }
 
     private static void prependNewImports(Path file, Set<Import> imports,

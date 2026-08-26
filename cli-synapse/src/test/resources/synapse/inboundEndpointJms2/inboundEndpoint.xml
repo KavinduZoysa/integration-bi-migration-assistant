@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inboundEndpoint name="TopicInbound" sequence="processTopic" protocol="jms" suspend="false"
+                 xmlns="http://ws.apache.org/ns/synapse">
+    <parameters>
+        <parameter name="transport.jms.Destination">NotificationTopic</parameter>
+        <parameter name="transport.jms.ConnectionFactoryType">topic</parameter>
+    </parameters>
+</inboundEndpoint>

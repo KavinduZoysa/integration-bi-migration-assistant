@@ -39,7 +39,7 @@ import java.util.Set;
  */
 public class APIConverter implements BIRConverter<ConversionContext> {
 
-    private static final String DEFAULT_LISTENER_REF = "httpListener";
+    public static final String DEFAULT_LISTENER_REF = "httpListener";
     private static final String ROOT_RESOURCE_PATH = ".";
     // Ballerina rest path parameter for a resource that matches any path, and the "any HTTP method"
     // accessor used when the Synapse resource does not restrict its methods.
@@ -87,7 +87,8 @@ public class APIConverter implements BIRConverter<ConversionContext> {
             MediatorConverters.convertMediators(resource.inSequence().mediators(), resourceContext);
         }
 
-        FaultSequenceConverter.wrap(resourceContext, context, resource.faultSequenceRef(), "faultSequence", "resource");
+        FaultSequenceConverter.wrap(resourceContext, context, resource.faultSequenceRef(), "faultSequence",
+                "resource", true);
 
         context.addImports(ConversionContext.MAIN_BAL_FILE, resourceContext.importStatements());
         String path = resource.matchAnyPath() ? ANY_PATH : buildResourcePath(resource.path());

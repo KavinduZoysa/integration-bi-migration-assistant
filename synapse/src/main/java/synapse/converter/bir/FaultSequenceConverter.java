@@ -58,18 +58,20 @@ final class FaultSequenceConverter {
     private FaultSequenceConverter() {
     }
 
-    // An unresolved key is reported and falls back to the same default as no faultSequence at all.
-    // An explicit but empty <faultSequence/> is the author's deliberate choice to leave failures
-    // unhandled, so it gets an empty 'on fail'.
+    // An unresolved key is reported and falls back to a default. An explicit but empty <faultSequence/>
+    // is the author's deliberate choice to leave failures unhandled, so it gets an empty 'on fail'.
     static void wrap(ResourceContext resourceContext, ConversionContext context, FaultSequenceRef faultSequenceRef,
-                      String sourceAttribute, String constructName) {
+                      String sourceAttribute, String constructName, boolean unresolvedKeyUsesProjectDefault) {
         switch (faultSequenceRef) {
             case FaultSequenceRef.KeyRef(String key) -> {
                 if (context.sequenceMetadata(key).isPresent()) {
                     wrapInFaultHandler(resourceContext, List.of(new SequenceMediator(key)));
-                } else {
+                } else if (unresolvedKeyUsesProjectDefault) {
                     boolean usesProjectFaultSequence = wrapInGlobalDefaultFaultHandler(resourceContext, context);
                     reportUnresolvedFaultSequence(key, resourceContext, usesProjectFaultSequence, sourceAttribute);
+                } else {
+                    wrapInDefaultFaultHandler(resourceContext);
+                    reportUnresolvedFaultSequence(key, resourceContext, false, sourceAttribute);
                 }
             }
             case FaultSequenceRef.Inline(FaultSequence faultSequence) -> {
@@ -182,25 +184,31 @@ final class FaultSequenceConverter {
                 new UnsupportedEntry("Implicit fault sequence", sourceAttribute, file, detail, ""));
     }
 
-    // No faultSequence at all, and no project-level "fault" sequence either: log the error and respond
-    // with an error status and a JSON error payload carrying the caught error's message.
+    // No faultSequence at all, and no project-level "fault" sequence either: log the error, and respond
+    // with an error status and a JSON error payload carrying the caught error's message if this scope has
+    // a reply transport to respond on.
     private static void wrapInDefaultFaultHandler(ResourceContext resourceContext) {
         List<Statement> doBody = extractTrailingStatements(resourceContext);
         resourceContext.importStatements().add(LOG_IMPORT);
-        resourceContext.statements().add(
-                new Statement.DoStatement(doBody, new OnFailClause(defaultOnFailBody(), ERROR_BINDING)));
+        resourceContext.statements().add(new Statement.DoStatement(doBody,
+                new OnFailClause(defaultOnFailBody(resourceContext.supportsReply()), ERROR_BINDING)));
     }
 
-    // Log the error and respond with an error status and a JSON error payload carrying the caught
-    // error's message. respond() is a no-op if the caller has already had a response attempted on it,
-    // so this is always safe to call.
+    // Log the error and, if this scope has a reply transport (see ScopeContext#supportsReply), respond
+    // with an error status and a JSON error payload carrying the caught error's message. respond() is a
+    // no-op if the caller has already had a response attempted on it, so this is always safe to call.
+    // A scope with no reply transport (e.g. a jms/file inbound endpoint) only logs: there is no caller to
+    // respond to.
     @NotNull
-    private static List<Statement> defaultOnFailBody() {
-        return List.of(
-                new Statement.BallerinaStatement(
-                        "log:printError(\"" + UNHANDLED_ERROR_LOG_MESSAGE + "\", 'error = " + FAULT_ERROR_VAR + ");"),
-                new Statement.BallerinaStatement("ctx.payload = {\"error\": " + FAULT_ERROR_VAR + ".message()};"),
-                new Statement.BallerinaStatement("ctx.statusCode = " + UNHANDLED_ERROR_STATUS_CODE + ";"),
-                new Statement.BallerinaStatement("check respond(ctx);"));
+    private static List<Statement> defaultOnFailBody(boolean supportsReply) {
+        List<Statement> body = new ArrayList<>(List.of(new Statement.BallerinaStatement(
+                "log:printError(\"" + UNHANDLED_ERROR_LOG_MESSAGE + "\", 'error = " + FAULT_ERROR_VAR + ");")));
+        if (supportsReply) {
+            body.add(new Statement.BallerinaStatement(
+                    "ctx.payload = {\"error\": " + FAULT_ERROR_VAR + ".message()};"));
+            body.add(new Statement.BallerinaStatement("ctx.statusCode = " + UNHANDLED_ERROR_STATUS_CODE + ";"));
+            body.add(new Statement.BallerinaStatement("check respond(ctx);"));
+        }
+        return body;
     }
 }
