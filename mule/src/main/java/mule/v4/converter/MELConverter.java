@@ -154,6 +154,7 @@ public class MELConverter {
                 switch (token.toString()) {
                     case "and" -> result.append("&&");
                     case "or" -> result.append("||");
+                    case "default" -> result.append(" ?: ");
                     case "map" -> result.append(".map(");
                     case "contains" -> {
                         throw new UnsupportedOperationException("query operations not supported");

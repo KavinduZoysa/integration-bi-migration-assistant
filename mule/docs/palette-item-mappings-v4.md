@@ -116,6 +116,7 @@ import ballerina/log;
 
 public type Vars record {|
     string httpStatus?;
+    anydata outboundHeaders?;
 |};
 
 public type Attributes record {|
@@ -175,8 +176,8 @@ service class MuleResponseErrorInterceptor0 {
 
             // set payload
 
-            string payload6 = "{\"message\":\"Bad request\"}";
-            ctx.payload = payload6;
+            string payload0 = "{\"message\":\"Bad request\"}";
+            ctx.payload = payload0;
             http:Response response = <http:Response>ctx.attributes.response;
             response.statusCode = 500;
         } else if err is "APIKIT:NOT_FOUND" {
@@ -184,15 +185,15 @@ service class MuleResponseErrorInterceptor0 {
             ctx.vars.httpStatus = "404";
 
             // set payload
-            string payload7 = "{\"message\":\"Resource not found\"}";
-            ctx.payload = payload7;
+            string payload1 = "{\"message\":\"Resource not found\"}";
+            ctx.payload = payload1;
         } else if err is "APIKIT:METHOD_NOT_ALLOWED" {
             // on-error-propagate
             ctx.vars.httpStatus = "405";
 
             // set payload
-            string payload8 = "{\"message\":\"Method not allowed\"}";
-            ctx.payload = payload8;
+            string payload2 = "{\"message\":\"Method not allowed\"}";
+            ctx.payload = payload2;
             http:Response response = <http:Response>ctx.attributes.response;
             response.statusCode = 500;
         } else if err is "APIKIT:NOT_ACCEPTABLE" {
@@ -200,8 +201,8 @@ service class MuleResponseErrorInterceptor0 {
             ctx.vars.httpStatus = "406";
 
             // set payload
-            string payload9 = "{\"message\":\"Not acceptable\"}";
-            ctx.payload = payload9;
+            string payload3 = "{\"message\":\"Not acceptable\"}";
+            ctx.payload = payload3;
             http:Response response = <http:Response>ctx.attributes.response;
             response.statusCode = 500;
         } else if err is "APIKIT:UNSUPPORTED_MEDIA_TYPE" {
@@ -209,8 +210,8 @@ service class MuleResponseErrorInterceptor0 {
             ctx.vars.httpStatus = "415";
 
             // set payload
-            string payload10 = "{\"message\":\"Unsupported media type\"}";
-            ctx.payload = payload10;
+            string payload4 = "{\"message\":\"Unsupported media type\"}";
+            ctx.payload = payload4;
             http:Response response = <http:Response>ctx.attributes.response;
             response.statusCode = 500;
         } else if err is "APIKIT:NOT_IMPLEMENTED" {
@@ -218,12 +219,22 @@ service class MuleResponseErrorInterceptor0 {
             ctx.vars.httpStatus = "501";
 
             // set payload
-            string payload11 = "{\"message\":\"Not implemented\"}";
-            ctx.payload = payload11;
+            string payload5 = "{\"message\":\"Not implemented\"}";
+            ctx.payload = payload5;
             http:Response response = <http:Response>ctx.attributes.response;
             response.statusCode = 500;
         }
         (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+
+        // http response headers
+        anydata responseHeaderValues = ctx.vars?.outboundHeaders ?: {};
+        map<string> responseHeaders = check responseHeaderValues.cloneWithType();
+        foreach [string, string] [headerName, headerValue] in responseHeaders.entries() {
+            interceptedResponse.setHeader(headerName, headerValue);
+        }
+
+        // http response status code
+        interceptedResponse.statusCode = check int:fromString((ctx.vars?.httpStatus ?: 500).toString());
         return <http:Response>ctx.attributes.response;
     }
 }
@@ -234,6 +245,16 @@ service class MuleResponseInterceptor0 {
     remote function interceptResponse(http:RequestContext requestContext, http:Response response) returns http:Response|error {
         Context ctx = {attributes: {response: response}};
         (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+
+        // http response headers
+        anydata responseHeaderValues = ctx.vars?.outboundHeaders ?: {};
+        map<string> responseHeaders = check responseHeaderValues.cloneWithType();
+        foreach [string, string] [headerName, headerValue] in responseHeaders.entries() {
+            response.setHeader(headerName, headerValue);
+        }
+
+        // http response status code
+        response.statusCode = check int:fromString((ctx.vars?.httpStatus ?: 200).toString());
         return response;
     }
 }
@@ -405,12 +426,7 @@ service / on listener\-config {
 **Input (response_bodies_with_any_error_handler.xml):**
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
-<mule xmlns="http://www.mulesoft.org/schema/mule/core"
-      xmlns:http="http://www.mulesoft.org/schema/mule/http"
-      xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
-      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
-      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-      xsi:schemaLocation="
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
 http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd">
@@ -440,10 +456,9 @@ http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/m
     </flow>
 
     <flow name="get:\orders\(id):api-config">
-        <set-payload value='#["B3"]' />
+        <set-payload value='#["B4"]' />
     </flow>
 </mule>
-
 ```
 **Output (response_bodies_with_any_error_handler.bal):**
 ```ballerina
@@ -479,8 +494,8 @@ service http:InterceptableService / on listener\-config {
         Context ctx = {attributes: {request, response: new, uriParams: {id}}};
 
         // set payload
-        string payload1 = "B3";
-        ctx.payload = payload1;
+        string payload3 = "B4";
+        ctx.payload = payload3;
 
         (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
         return <http:Response>ctx.attributes.response;
@@ -494,6 +509,10 @@ service class MuleResponseErrorInterceptor0 {
         Context ctx = {attributes: {response: interceptedResponse}};
         // on-error-continue
         log:printInfo("Handle any error");
+
+        // set payload
+        string payload0 = "B1";
+        ctx.payload = payload0;
         (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
         return <http:Response>ctx.attributes.response;
     }
@@ -506,8 +525,12 @@ service class MuleResponseInterceptor0 {
         Context ctx = {attributes: {response: response}};
 
         // set payload
-        string payload0 = "B2";
-        ctx.payload = payload0;
+        string payload1 = "B2";
+        ctx.payload = payload1;
+
+        // set payload
+        string payload2 = "B2";
+        ctx.payload = payload2;
         (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
         return response;
     }
@@ -2690,6 +2713,415 @@ service /mule4 on config {
 
         (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
         return <http:Response>ctx.attributes.response;
+    }
+}
+
+```
+
+- ### Listener With Both Responses
+
+**Input (listener_with_both_responses.xml):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+    <http:listener-config name="config" doc:name="HTTP Listener config" basePath="/mule4">
+        <http:listener-connection host="0.0.0.0" port="8081"/>
+    </http:listener-config>
+    <flow name="demoFlow">
+        <http:listener doc:name="Listener" config-ref="config" allowedMethods="GET" path="/demo">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+            </http:error-response>
+        </http:listener>
+        <set-variable variableName="httpStatus" value="202"/>
+        <logger level="INFO" doc:name="Logger" message="xxx: logger invoked"/>
+    </flow>
+</mule>
+
+```
+**Output (listener_with_both_responses.bal):**
+```ballerina
+import ballerina/http;
+import ballerina/log;
+
+public type Vars record {|
+    string httpStatus?;
+    anydata outboundHeaders?;
+|};
+
+public type Attributes record {|
+    http:Request request?;
+    http:Response response?;
+    map<string> uriParams = {};
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Vars vars = {};
+    Attributes attributes;
+|};
+
+public listener http:Listener config = new (8081);
+
+service http:InterceptableService /mule4 on config {
+    function init() returns error? {
+    }
+
+    public function createInterceptors() returns [MuleResponseErrorInterceptor0, MuleResponseInterceptor0] {
+        return [new MuleResponseErrorInterceptor0(), new MuleResponseInterceptor0()];
+    }
+
+    resource function get demo(http:Request request) returns http:Response|error {
+        Context ctx = {attributes: {request, response: new}};
+        ctx.vars.httpStatus = "202";
+        log:printInfo("xxx: logger invoked");
+
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return <http:Response>ctx.attributes.response;
+    }
+}
+
+service class MuleResponseErrorInterceptor0 {
+    *http:ResponseErrorInterceptor;
+
+    remote function interceptResponseError(http:RequestContext requestContext, http:Response interceptedResponse, error err) returns http:Response|error {
+        Context ctx = {attributes: {response: interceptedResponse}};
+
+        // set payload
+        anydata payload0 = ctx.payload;
+        ctx.payload = payload0;
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+
+        // http response status code
+        interceptedResponse.statusCode = check int:fromString((ctx.vars?.httpStatus ?: 500).toString());
+        return <http:Response>ctx.attributes.response;
+    }
+}
+
+service class MuleResponseInterceptor0 {
+    *http:ResponseInterceptor;
+
+    remote function interceptResponse(http:RequestContext requestContext, http:Response response) returns http:Response|error {
+        Context ctx = {attributes: {response: response}};
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+
+        // http response headers
+        anydata responseHeaderValues = ctx.vars?.outboundHeaders ?: {};
+        map<string> responseHeaders = check responseHeaderValues.cloneWithType();
+        foreach [string, string] [headerName, headerValue] in responseHeaders.entries() {
+            response.setHeader(headerName, headerValue);
+        }
+
+        // http response status code
+        response.statusCode = check int:fromString((ctx.vars?.httpStatus ?: 200).toString());
+        return response;
+    }
+}
+
+```
+
+- ### Listener With Cdata Response Headers
+
+**Input (listener_with_cdata_response_headers.xml):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+    <http:listener-config name="config" doc:name="HTTP Listener config" basePath="/mule4">
+        <http:listener-connection host="0.0.0.0" port="8081"/>
+    </http:listener-config>
+    <flow name="demoFlow">
+        <http:listener doc:name="Listener" config-ref="config" allowedMethods="GET" path="/demo">
+            <http:response statusCode="200">
+                <http:headers>
+                    <![CDATA[
+                        #[{
+                            "foo": "123456"
+                        }]
+                    ]]>
+                </http:headers>
+            </http:response>
+            <http:error-response statusCode="500">
+                <http:headers>
+                    <![CDATA[
+                        #[{
+                            "foo": "123456"
+                        }]
+                    ]]>
+                </http:headers>
+            </http:error-response>
+        </http:listener>
+        <logger level="INFO" doc:name="Logger" message="xxx: logger invoked"/>
+    </flow>
+</mule>
+
+```
+**Output (listener_with_cdata_response_headers.bal):**
+```ballerina
+import ballerina/http;
+import ballerina/log;
+
+public type Attributes record {|
+    http:Request request?;
+    http:Response response?;
+    map<string> uriParams = {};
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Attributes attributes;
+|};
+
+public listener http:Listener config = new (8081);
+
+service http:InterceptableService /mule4 on config {
+    function init() returns error? {
+    }
+
+    public function createInterceptors() returns [MuleResponseErrorInterceptor0, MuleResponseInterceptor0] {
+        return [new MuleResponseErrorInterceptor0(), new MuleResponseInterceptor0()];
+    }
+
+    resource function get demo(http:Request request) returns http:Response|error {
+        Context ctx = {attributes: {request, response: new}};
+        log:printInfo("xxx: logger invoked");
+
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return <http:Response>ctx.attributes.response;
+    }
+}
+
+service class MuleResponseErrorInterceptor0 {
+    *http:ResponseErrorInterceptor;
+
+    remote function interceptResponseError(http:RequestContext requestContext, http:Response interceptedResponse, error err) returns http:Response|error {
+        Context ctx = {attributes: {response: interceptedResponse}};
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+
+        // http response headers
+        anydata responseHeaderValues = {
+            "foo": "123456"
+        };
+        map<string> responseHeaders = check responseHeaderValues.cloneWithType();
+        foreach [string, string] [headerName, headerValue] in responseHeaders.entries() {
+            interceptedResponse.setHeader(headerName, headerValue);
+        }
+
+        // http response status code
+        interceptedResponse.statusCode = 500;
+        return <http:Response>ctx.attributes.response;
+    }
+}
+
+service class MuleResponseInterceptor0 {
+    *http:ResponseInterceptor;
+
+    remote function interceptResponse(http:RequestContext requestContext, http:Response response) returns http:Response|error {
+        Context ctx = {attributes: {response: response}};
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+
+        // http response headers
+        anydata responseHeaderValues = {
+            "foo": "123456"
+        };
+        map<string> responseHeaders = check responseHeaderValues.cloneWithType();
+        foreach [string, string] [headerName, headerValue] in responseHeaders.entries() {
+            response.setHeader(headerName, headerValue);
+        }
+
+        // http response status code
+        response.statusCode = 200;
+        return response;
+    }
+}
+
+```
+
+- ### Listener With Error Response
+
+**Input (listener_with_error_response.xml):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+    <http:listener-config name="config" doc:name="HTTP Listener config" basePath="/mule4">
+        <http:listener-connection host="0.0.0.0" port="8081"/>
+    </http:listener-config>
+    <flow name="demoFlow">
+        <http:listener doc:name="Listener" config-ref="config" allowedMethods="GET" path="/demo">
+            <http:error-response statusCode="500">
+                <http:body>#["internal error"]</http:body>
+                <http:headers>#[{"Content-Type": "text/plain"}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <logger level="INFO" doc:name="Logger" message="xxx: logger invoked"/>
+    </flow>
+</mule>
+
+```
+**Output (listener_with_error_response.bal):**
+```ballerina
+import ballerina/http;
+import ballerina/log;
+
+public type Attributes record {|
+    http:Request request?;
+    http:Response response?;
+    map<string> uriParams = {};
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Attributes attributes;
+|};
+
+public listener http:Listener config = new (8081);
+
+service http:InterceptableService /mule4 on config {
+    function init() returns error? {
+    }
+
+    public function createInterceptors() returns [MuleResponseErrorInterceptor0] {
+        return [new MuleResponseErrorInterceptor0()];
+    }
+
+    resource function get demo(http:Request request) returns http:Response|error {
+        Context ctx = {attributes: {request, response: new}};
+        log:printInfo("xxx: logger invoked");
+
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return <http:Response>ctx.attributes.response;
+    }
+}
+
+service class MuleResponseErrorInterceptor0 {
+    *http:ResponseErrorInterceptor;
+
+    remote function interceptResponseError(http:RequestContext requestContext, http:Response interceptedResponse, error err) returns http:Response|error {
+        Context ctx = {attributes: {response: interceptedResponse}};
+
+        // set payload
+        string payload0 = "internal error";
+        ctx.payload = payload0;
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+
+        // http response headers
+        anydata responseHeaderValues = {"Content-Type": "text/plain"};
+        map<string> responseHeaders = check responseHeaderValues.cloneWithType();
+        foreach [string, string] [headerName, headerValue] in responseHeaders.entries() {
+            interceptedResponse.setHeader(headerName, headerValue);
+        }
+
+        // http response status code
+        interceptedResponse.statusCode = 500;
+        return <http:Response>ctx.attributes.response;
+    }
+}
+
+```
+
+- ### Listener With Response
+
+**Input (listener_with_response.xml):**
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+    <http:listener-config name="config" doc:name="HTTP Listener config" basePath="/mule4">
+        <http:listener-connection host="0.0.0.0" port="8081"/>
+    </http:listener-config>
+    <flow name="demoFlow">
+        <http:listener doc:name="Listener" config-ref="config" allowedMethods="GET" path="/demo">
+            <http:response statusCode="201">
+                <http:body>#["created"]</http:body>
+                <http:headers>#[{"Content-Type": "application/json", "x-source": "mule"}]</http:headers>
+            </http:response>
+        </http:listener>
+        <logger level="INFO" doc:name="Logger" message="xxx: logger invoked"/>
+    </flow>
+</mule>
+
+```
+**Output (listener_with_response.bal):**
+```ballerina
+import ballerina/http;
+import ballerina/log;
+
+public type Attributes record {|
+    http:Request request?;
+    http:Response response?;
+    map<string> uriParams = {};
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Attributes attributes;
+|};
+
+public listener http:Listener config = new (8081);
+
+service http:InterceptableService /mule4 on config {
+    function init() returns error? {
+    }
+
+    public function createInterceptors() returns [MuleResponseInterceptor0] {
+        return [new MuleResponseInterceptor0()];
+    }
+
+    resource function get demo(http:Request request) returns http:Response|error {
+        Context ctx = {attributes: {request, response: new}};
+        log:printInfo("xxx: logger invoked");
+
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+        return <http:Response>ctx.attributes.response;
+    }
+}
+
+service class MuleResponseInterceptor0 {
+    *http:ResponseInterceptor;
+
+    remote function interceptResponse(http:RequestContext requestContext, http:Response response) returns http:Response|error {
+        Context ctx = {attributes: {response: response}};
+
+        // set payload
+        string payload0 = "created";
+        ctx.payload = payload0;
+        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+
+        // http response headers
+        anydata responseHeaderValues = {"Content-Type": "application/json", "x-source": "mule"};
+        map<string> responseHeaders = check responseHeaderValues.cloneWithType();
+        foreach [string, string] [headerName, headerValue] in responseHeaders.entries() {
+            response.setHeader(headerName, headerValue);
+        }
+
+        // http response status code
+        response.statusCode = 201;
+        return response;
     }
 }
 

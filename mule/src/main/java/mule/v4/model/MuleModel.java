@@ -29,12 +29,22 @@ import java.util.regex.Pattern;
 public record MuleModel() {
 
     public record HttpListener(Kind kind, String configRef, String resourcePath, String[] allowedMethods,
-                               boolean hasResponse, boolean hasErrorResponse)
+                               Optional<HttpResponse> response, Optional<HttpResponse> errorResponse)
             implements MuleRecord {
         public HttpListener(String configRef, String resourcePath, String[] allowedMethods,
-                            boolean hasResponse, boolean hasErrorResponse) {
-            this(Kind.HTTP_LISTENER, configRef, resourcePath, allowedMethods, hasResponse, hasErrorResponse);
+                            Optional<HttpResponse> response, Optional<HttpResponse> errorResponse) {
+            this(Kind.HTTP_LISTENER, configRef, resourcePath, allowedMethods, response, errorResponse);
         }
+    }
+
+    /**
+     * Models the {@code http:response} and {@code http:error-response} elements of an {@code http:listener}.
+     *
+     * @param statusCode  value of the {@code statusCode} attribute
+     * @param body        DataWeave script of the {@code http:body} child element
+     * @param headers     DataWeave script of the {@code http:headers} child element
+     */
+    public record HttpResponse(Optional<String> statusCode, Optional<String> body, Optional<String> headers) {
     }
 
     public record VMQueue(String queueName, String queueType) {

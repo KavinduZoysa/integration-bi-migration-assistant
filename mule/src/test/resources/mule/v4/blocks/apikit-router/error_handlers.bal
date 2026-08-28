@@ -3,6 +3,7 @@ import ballerina/log;
 
 public type Vars record {|
     string httpStatus?;
+    anydata outboundHeaders?;
 |};
 
 public type Attributes record {|
@@ -62,8 +63,8 @@ service class MuleResponseErrorInterceptor0 {
 
             // set payload
 
-            string payload6 = "{\"message\":\"Bad request\"}";
-            ctx.payload = payload6;
+            string payload0 = "{\"message\":\"Bad request\"}";
+            ctx.payload = payload0;
             http:Response response = <http:Response>ctx.attributes.response;
             response.statusCode = 500;
         } else if err is "APIKIT:NOT_FOUND" {
@@ -71,15 +72,15 @@ service class MuleResponseErrorInterceptor0 {
             ctx.vars.httpStatus = "404";
 
             // set payload
-            string payload7 = "{\"message\":\"Resource not found\"}";
-            ctx.payload = payload7;
+            string payload1 = "{\"message\":\"Resource not found\"}";
+            ctx.payload = payload1;
         } else if err is "APIKIT:METHOD_NOT_ALLOWED" {
             // on-error-propagate
             ctx.vars.httpStatus = "405";
 
             // set payload
-            string payload8 = "{\"message\":\"Method not allowed\"}";
-            ctx.payload = payload8;
+            string payload2 = "{\"message\":\"Method not allowed\"}";
+            ctx.payload = payload2;
             http:Response response = <http:Response>ctx.attributes.response;
             response.statusCode = 500;
         } else if err is "APIKIT:NOT_ACCEPTABLE" {
@@ -87,8 +88,8 @@ service class MuleResponseErrorInterceptor0 {
             ctx.vars.httpStatus = "406";
 
             // set payload
-            string payload9 = "{\"message\":\"Not acceptable\"}";
-            ctx.payload = payload9;
+            string payload3 = "{\"message\":\"Not acceptable\"}";
+            ctx.payload = payload3;
             http:Response response = <http:Response>ctx.attributes.response;
             response.statusCode = 500;
         } else if err is "APIKIT:UNSUPPORTED_MEDIA_TYPE" {
@@ -96,8 +97,8 @@ service class MuleResponseErrorInterceptor0 {
             ctx.vars.httpStatus = "415";
 
             // set payload
-            string payload10 = "{\"message\":\"Unsupported media type\"}";
-            ctx.payload = payload10;
+            string payload4 = "{\"message\":\"Unsupported media type\"}";
+            ctx.payload = payload4;
             http:Response response = <http:Response>ctx.attributes.response;
             response.statusCode = 500;
         } else if err is "APIKIT:NOT_IMPLEMENTED" {
@@ -105,12 +106,22 @@ service class MuleResponseErrorInterceptor0 {
             ctx.vars.httpStatus = "501";
 
             // set payload
-            string payload11 = "{\"message\":\"Not implemented\"}";
-            ctx.payload = payload11;
+            string payload5 = "{\"message\":\"Not implemented\"}";
+            ctx.payload = payload5;
             http:Response response = <http:Response>ctx.attributes.response;
             response.statusCode = 500;
         }
         (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+
+        // http response headers
+        anydata responseHeaderValues = ctx.vars?.outboundHeaders ?: {};
+        map<string> responseHeaders = check responseHeaderValues.cloneWithType();
+        foreach [string, string] [headerName, headerValue] in responseHeaders.entries() {
+            interceptedResponse.setHeader(headerName, headerValue);
+        }
+
+        // http response status code
+        interceptedResponse.statusCode = check int:fromString((ctx.vars?.httpStatus ?: 500).toString());
         return <http:Response>ctx.attributes.response;
     }
 }
@@ -121,6 +132,16 @@ service class MuleResponseInterceptor0 {
     remote function interceptResponse(http:RequestContext requestContext, http:Response response) returns http:Response|error {
         Context ctx = {attributes: {response: response}};
         (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
+
+        // http response headers
+        anydata responseHeaderValues = ctx.vars?.outboundHeaders ?: {};
+        map<string> responseHeaders = check responseHeaderValues.cloneWithType();
+        foreach [string, string] [headerName, headerValue] in responseHeaders.entries() {
+            response.setHeader(headerName, headerValue);
+        }
+
+        // http response status code
+        response.statusCode = check int:fromString((ctx.vars?.httpStatus ?: 200).toString());
         return response;
     }
 }

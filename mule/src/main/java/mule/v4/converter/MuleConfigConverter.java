@@ -26,6 +26,7 @@ import mule.v4.Context;
 import mule.v4.ConversionUtils;
 import mule.v4.dataweave.converter.DWCodeGenException;
 import mule.v4.dataweave.converter.DWReader;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -104,6 +105,9 @@ import static mule.v4.model.MuleModel.VMPublish;
 import static mule.v4.model.MuleModel.WhenInChoice;
 
 public class MuleConfigConverter {
+
+    private static final Pattern VARS_REFERENCE_PATTERN =
+            Pattern.compile(Pattern.quote(Constants.VARS_FIELD_ACCESS) + "\\??\\.(\\w+)");
 
     /**
      * Result of converting a Mule record.
@@ -810,6 +814,98 @@ public class MuleConfigConverter {
                         + "select [ key, <string>%2$s.get(key) ];").formatted(
                         varName, nilableName)));
         return varName;
+    }
+
+    /**
+     * Converts the {@code http:body} element of an {@code http:response} or an {@code http:error-response} element. The
+     * body overrides the payload produced by the flow, hence it is converted the same way as a {@code set-payload} and
+     * has to be applied before the payload is written to the response.
+     *
+     * @param ctx        conversion context
+     * @param bodyScript DataWeave script of the {@code http:body} element
+     * @return statements assigning the body to the context payload
+     */
+    @NotNull
+    public static List<Statement> convertHttpResponseBody(Context ctx, String bodyScript) {
+        return convertSetPayload(ctx, new Payload(bodyScript, "")).statements();
+    }
+
+    /**
+     * Converts the {@code http:headers} element of an {@code http:response} or an {@code http:error-response} element.
+     * The headers are written to the response after its payload, so that a {@code Content-Type} declared here wins
+     * over the one derived from the payload.
+     *
+     * @param ctx            conversion context
+     * @param headersScript  DataWeave script of the {@code http:headers} element, empty when not declared
+     * @param responseVarRef reference to the {@code http:Response} value the response is built on
+     * @return statements setting the headers of the response
+     */
+    @NotNull
+    public static List<Statement> convertHttpResponseHeaders(Context ctx, Optional<String> headersScript,
+                                                            String responseVarRef) {
+        if (headersScript.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        String headerValuesVar = "responseHeaderValues";
+        String headersVar = "responseHeaders";
+        List<Statement> stmts = new ArrayList<>();
+        stmts.add(stmtFrom("\n\n// http response headers\n"));
+        try {
+            String balExpr = convertMuleExprToBal(ctx, headersScript.get());
+            declareReferencedVars(ctx, balExpr);
+            stmts.add(stmtFrom("anydata %s = %s;".formatted(headerValuesVar, balExpr)));
+        } catch (ScriptConversionException e) {
+            stmts.add(new Statement.Comment("TODO: failed to convert " + e.getMelExpression()));
+            return stmts;
+        }
+        stmts.add(stmtFrom("map<string> %s = check %s.cloneWithType();".formatted(headersVar, headerValuesVar)));
+        stmts.add(new ForeachStatement(
+                new TypeBindingPattern(typeFrom("[string, string]"), "[headerName, headerValue]"),
+                exprFrom("%s.entries()".formatted(headersVar)),
+                List.of(stmtFrom("%s.setHeader(headerName, headerValue);".formatted(responseVarRef)))));
+        return stmts;
+    }
+
+    /**
+     * Converts the {@code statusCode} attribute of an {@code http:response} or an {@code http:error-response} element.
+     *
+     * @param ctx            conversion context
+     * @param statusCode     value of the {@code statusCode} attribute, empty when not declared
+     * @param responseVarRef reference to the {@code http:Response} value the response is built on
+     * @return statements setting the status code of the response
+     */
+    @NotNull
+    public static List<Statement> convertHttpResponseStatusCode(Context ctx, Optional<String> statusCode,
+                                                                String responseVarRef) {
+        if (statusCode.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        String balExpr;
+        try {
+            balExpr = ConversionUtils.getAttrValInt(ctx, statusCode.get());
+        } catch (ScriptConversionException e) {
+            return List.of(new Statement.Comment("TODO: failed to convert " + e.getMelExpression()));
+        }
+        declareReferencedVars(ctx, balExpr);
+        if (!"int".equals(inferTypeFromBalExpr(balExpr)) && !balExpr.startsWith("check int:")) {
+            balExpr = "check int:fromString((%s).toString())".formatted(balExpr);
+        }
+        return List.of(stmtFrom("\n\n// http response status code\n"),
+                stmtFrom("%s.statusCode = %s;".formatted(responseVarRef, balExpr)));
+    }
+
+    /**
+     * Declares the variables the given expression reads but no {@code set-variable} has written, so that the generated
+     * {@code Vars} record has a field for them. Mule variables set by a connector, such as the APIkit router status
+     * code and outbound headers variables, are only read within {@code http:response} elements.
+     */
+    private static void declareReferencedVars(Context ctx, String balExpr) {
+        Matcher matcher = VARS_REFERENCE_PATTERN.matcher(balExpr);
+        while (matcher.find()) {
+            ctx.projectCtx.vars.putIfAbsent(matcher.group(1), "anydata");
+        }
     }
 
     /**

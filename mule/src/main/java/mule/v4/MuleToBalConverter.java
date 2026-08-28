@@ -77,6 +77,9 @@ import static mule.v4.ConversionUtils.getBallerinaAbsolutePath;
 import static mule.v4.ConversionUtils.getBallerinaResourcePath;
 import static mule.v4.ConversionUtils.insertLeadingSlash;
 import static mule.v4.converter.MuleConfigConverter.convertErrorHandlerRecords;
+import static mule.v4.converter.MuleConfigConverter.convertHttpResponseBody;
+import static mule.v4.converter.MuleConfigConverter.convertHttpResponseHeaders;
+import static mule.v4.converter.MuleConfigConverter.convertHttpResponseStatusCode;
 import static mule.v4.converter.MuleConfigConverter.convertTopLevelMuleBlocks;
 import static mule.v4.model.MuleModel.DbConnection;
 import static mule.v4.model.MuleModel.DbMySqlConnection;
@@ -88,6 +91,7 @@ import static mule.v4.model.MuleModel.Flow;
 import static mule.v4.model.MuleModel.GlobalProperty;
 import static mule.v4.model.MuleModel.HTTPListenerConfig;
 import static mule.v4.model.MuleModel.HttpListener;
+import static mule.v4.model.MuleModel.HttpResponse;
 import static mule.v4.model.MuleModel.Kind;
 import static mule.v4.model.MuleModel.MuleRecord;
 import static mule.v4.model.MuleModel.SubFlow;
@@ -629,20 +633,27 @@ public class MuleToBalConverter {
         if (!segments.requestInterceptorBlocks().isEmpty()) {
             service.httpInterceptors().add(genRequestInterceptor(ctx, segments.requestInterceptorBlocks()));
         }
-        if (src.hasErrorResponse() || segments.errorHandler().isPresent()) {
-            service.httpInterceptors().add(genResponseErrorInterceptor(ctx, segments.errorHandler()));
+        if (src.errorResponse().isPresent() || segments.errorHandler().isPresent()) {
+            service.httpInterceptors().add(genResponseErrorInterceptor(ctx, segments.errorHandler(),
+                    src.errorResponse()));
         }
-        if (src.hasResponse() || !segments.responseInterceptorBlocks().isEmpty()) {
-            service.httpInterceptors().add(genResponseInterceptor(ctx, segments.responseInterceptorBlocks()));
+        if (src.response().isPresent() || !segments.responseInterceptorBlocks().isEmpty()) {
+            service.httpInterceptors().add(genResponseInterceptor(ctx, segments.responseInterceptorBlocks(),
+                    src.response()));
         }
         services.add(service);
         return service;
     }
 
     private static HttpFlowSegments splitHttpFlow(List<MuleRecord> flowBlocks) {
+        // A flow declares at most one error handler and it is always the last block of the flow.
+        boolean hasErrorHandler = !flowBlocks.isEmpty() && flowBlocks.getLast() instanceof ErrorHandler;
+        List<MuleRecord> blocks = hasErrorHandler
+                ? flowBlocks.subList(0, flowBlocks.size() - 1) : flowBlocks;
+
         int routerIndex = -1;
-        for (int i = 0; i < flowBlocks.size(); i++) {
-            if (flowBlocks.get(i) instanceof ApiKitRouter) {
+        for (int i = 0; i < blocks.size(); i++) {
+            if (blocks.get(i) instanceof ApiKitRouter) {
                 routerIndex = i;
                 break;
             }
@@ -651,24 +662,11 @@ public class MuleToBalConverter {
             return new HttpFlowSegments(List.of(), flowBlocks, List.of(), Optional.empty());
         }
 
-        int errorHandlerIndex = flowBlocks.size();
-        for (int i = routerIndex + 1; i < flowBlocks.size(); i++) {
-            if (flowBlocks.get(i) instanceof ErrorHandler) {
-                errorHandlerIndex = i;
-                break;
-            }
-        }
-
-        List<MuleRecord> serviceBlocks = new ArrayList<>();
-        serviceBlocks.add(flowBlocks.get(routerIndex));
-        serviceBlocks.addAll(flowBlocks.subList(errorHandlerIndex, flowBlocks.size()));
-        Optional<ErrorHandler> errorHandler = errorHandlerIndex < flowBlocks.size()
-                ? Optional.of((ErrorHandler) flowBlocks.get(errorHandlerIndex)) : Optional.empty();
         return new HttpFlowSegments(
-                List.copyOf(flowBlocks.subList(0, routerIndex)),
-                serviceBlocks,
-                List.copyOf(flowBlocks.subList(routerIndex + 1, errorHandlerIndex)),
-                errorHandler);
+                List.copyOf(blocks.subList(0, routerIndex)),
+                List.of(blocks.get(routerIndex)),
+                List.copyOf(blocks.subList(routerIndex + 1, blocks.size())),
+                hasErrorHandler ? Optional.of((ErrorHandler) flowBlocks.getLast()) : Optional.empty());
     }
 
     private static HTTPInterceptor genRequestInterceptor(Context ctx, List<MuleRecord> flowBlocks) {
@@ -694,14 +692,21 @@ public class MuleToBalConverter {
         return interceptor;
     }
 
-    private static HTTPInterceptor genResponseInterceptor(Context ctx, List<MuleRecord> flowBlocks) {
+    private static HTTPInterceptor genResponseInterceptor(Context ctx, List<MuleRecord> flowBlocks,
+                                                          Optional<HttpResponse> httpResponse) {
         ctx.inServiceGen = true;
         List<Statement> body = new ArrayList<>();
         body.add(stmtFrom("Context %s = {%s: {%s: %s}};".formatted(Constants.CONTEXT_REFERENCE,
                 Constants.ATTRIBUTES_REF, Constants.HTTP_RESPONSE_REF, Constants.HTTP_RESPONSE_REF)));
         body.addAll(convertTopLevelMuleBlocks(ctx, flowBlocks));
+        httpResponse.flatMap(HttpResponse::body)
+                .ifPresent(bodyScript -> body.addAll(convertHttpResponseBody(ctx, bodyScript)));
         body.add(stmtFrom("(<%s>%s.%s).setPayload(%s.payload);".formatted(HTTP_RESPONSE_TYPE,
                 Constants.ATTRIBUTES_FIELD_ACCESS, Constants.HTTP_RESPONSE_REF, Constants.CONTEXT_REFERENCE)));
+        httpResponse.ifPresent(response -> {
+            body.addAll(convertHttpResponseHeaders(ctx, response.headers(), Constants.HTTP_RESPONSE_REF));
+            body.addAll(convertHttpResponseStatusCode(ctx, response.statusCode(), Constants.HTTP_RESPONSE_REF));
+        });
         body.add(stmtFrom("return %s;".formatted(Constants.HTTP_RESPONSE_REF)));
 
         List<Parameter> parameters = List.of(
@@ -717,15 +722,22 @@ public class MuleToBalConverter {
         return interceptor;
     }
 
-    private static HTTPInterceptor genResponseErrorInterceptor(Context ctx, Optional<ErrorHandler> errorHandler) {
+    private static HTTPInterceptor genResponseErrorInterceptor(Context ctx, Optional<ErrorHandler> errorHandler,
+                                                               Optional<HttpResponse> httpErrorResponse) {
         ctx.inServiceGen = true;
         String interceptedResponse = "interceptedResponse";
         List<Statement> body = new ArrayList<>();
         body.add(stmtFrom("Context %s = {%s: {%s: %s}};".formatted(Constants.CONTEXT_REFERENCE,
                 Constants.ATTRIBUTES_REF, Constants.HTTP_RESPONSE_REF, interceptedResponse)));
         errorHandler.ifPresent(handler -> body.addAll(convertErrorHandler(ctx, handler)));
+        httpErrorResponse.flatMap(HttpResponse::body)
+                .ifPresent(bodyScript -> body.addAll(convertHttpResponseBody(ctx, bodyScript)));
         body.add(stmtFrom("(<%s>%s.%s).setPayload(%s.payload);".formatted(HTTP_RESPONSE_TYPE,
                 Constants.ATTRIBUTES_FIELD_ACCESS, Constants.HTTP_RESPONSE_REF, Constants.CONTEXT_REFERENCE)));
+        httpErrorResponse.ifPresent(response -> {
+            body.addAll(convertHttpResponseHeaders(ctx, response.headers(), interceptedResponse));
+            body.addAll(convertHttpResponseStatusCode(ctx, response.statusCode(), interceptedResponse));
+        });
         body.add(stmtFrom("return <%s>%s.%s;".formatted(HTTP_RESPONSE_TYPE,
                 Constants.ATTRIBUTES_FIELD_ACCESS, Constants.HTTP_RESPONSE_REF)));
 

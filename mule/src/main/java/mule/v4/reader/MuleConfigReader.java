@@ -78,6 +78,7 @@ import static mule.v4.model.MuleModel.HTTPRequestConfig;
 import static mule.v4.model.MuleModel.HttpListener;
 import static mule.v4.model.MuleModel.MuleImport;
 import static mule.v4.model.MuleModel.HttpRequest;
+import static mule.v4.model.MuleModel.HttpResponse;
 import static mule.v4.model.MuleModel.Kind;
 import static mule.v4.model.MuleModel.LogLevel;
 import static mule.v4.model.MuleModel.Logger;
@@ -754,14 +755,39 @@ public class MuleConfigReader {
         String resourcePath = element.getAttribute("path");
         String[] allowedMethods = Arrays.stream(getAllowedMethods(element.getAttribute("allowedMethods")))
                 .map(String::toLowerCase).toArray(String[]::new);
-        boolean hasResponse = false;
-        boolean hasErrorResponse = false;
+        Optional<HttpResponse> response = Optional.empty();
+        Optional<HttpResponse> errorResponse = Optional.empty();
         while (muleElement.peekChild() != null) {
-            String tagName = muleElement.consumeChild().getElement().getTagName();
-            hasResponse |= "http:response".equals(tagName);
-            hasErrorResponse |= "http:error-response".equals(tagName);
+            MuleElement child = muleElement.consumeChild();
+            String tagName = child.getElement().getTagName();
+            if (MuleXMLTag.HTTP_RESPONSE.tag().equals(tagName)) {
+                response = Optional.of(readHttpResponse(ctx, child));
+            } else if (MuleXMLTag.HTTP_ERROR_RESPONSE.tag().equals(tagName)) {
+                errorResponse = Optional.of(readHttpResponse(ctx, child));
+            }
         }
-        return new HttpListener(configRef, resourcePath, allowedMethods, hasResponse, hasErrorResponse);
+        return new HttpListener(configRef, resourcePath, allowedMethods, response, errorResponse);
+    }
+
+    private static HttpResponse readHttpResponse(Context ctx, MuleElement muleElement) {
+        Optional<String> statusCode = readValue(muleElement.getElement().getAttribute("statusCode"));
+        Optional<String> body = Optional.empty();
+        Optional<String> headers = Optional.empty();
+        while (muleElement.peekChild() != null) {
+            MuleElement child = muleElement.consumeChild();
+            Element childElement = child.getElement();
+            String tagName = childElement.getTagName();
+            if (MuleXMLTag.HTTP_BODY.tag().equals(tagName)) {
+                body = readValue(childElement.getTextContent());
+            } else if (MuleXMLTag.HTTP_HEADERS.tag().equals(tagName)) {
+                headers = readValue(childElement.getTextContent());
+            }
+        }
+        return new HttpResponse(statusCode, body, headers);
+    }
+
+    private static Optional<String> readValue(String value) {
+        return value == null || value.isBlank() ? Optional.empty() : Optional.of(value.trim());
     }
 
     private static HttpRequest readHttpRequest(Context ctx, MuleElement muleElement) {
