@@ -59,6 +59,28 @@ public class HttpListenerTest extends AbstractBlockTest {
         testMule4ToBal("http-listener/query_params.xml", "http-listener/query_params.bal");
     }
 
+    @Test(dataProvider = "responseBuilderTestData")
+    public void testListenerResponseBuilders(String inputFile, String outputFile) {
+        testMule4ToBal(inputFile, outputFile);
+    }
+
+    @DataProvider(name = "responseBuilderTestData")
+    public Object[][] responseBuilderTestData() {
+        return new Object[][] {
+                // http:response with a status code, a body and headers
+                {"http-listener/listener_with_response.xml", "http-listener/listener_with_response.bal"},
+                // http:error-response with a status code, a body and headers
+                {"http-listener/listener_with_error_response.xml",
+                        "http-listener/listener_with_error_response.bal"},
+                // both, with the status code and the headers given as DataWeave expressions
+                {"http-listener/listener_with_both_responses.xml",
+                        "http-listener/listener_with_both_responses.bal"},
+                // headers given as a multi line CDATA wrapped DataWeave expression
+                {"http-listener/listener_with_cdata_response_headers.xml",
+                        "http-listener/listener_with_cdata_response_headers.bal"}
+        };
+    }
+
     @Test(dataProvider = "httpMethodsTestData")
     public void testAllowedResourceMethods(String inputFile, String outputFile) {
         testMule4ToBal(inputFile, outputFile);

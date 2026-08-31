@@ -380,5 +380,7 @@ public class Context extends ContextBase {
         public int originalPayloadVarCount = 0;
         public int firstSuccessfulFuncCount = 0;
         public int firstSuccessfulCount = 0;
+        public int responseInterceptorCount = 0;
+        public int responseErrorInterceptorCount = 0;
     }
 }

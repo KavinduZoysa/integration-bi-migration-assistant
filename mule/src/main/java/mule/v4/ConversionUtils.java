@@ -68,6 +68,9 @@ public class ConversionUtils {
 
     private static String processPathSegment(Context ctx, String segment, List<String> pathParams)
             throws ScriptConversionException {
+        if ("*".equals(segment)) {
+            return "[string... path]";
+        }
         if (segment.startsWith("{") && segment.endsWith("}")) {
             // We come here for mule path params. e.g. foo/{bar}/baz
             String pathParamName = segment.substring(1, segment.length() - 1);

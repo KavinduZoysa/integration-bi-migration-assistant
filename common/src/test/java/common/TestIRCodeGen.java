@@ -88,6 +88,58 @@ public class TestIRCodeGen {
         assertGeneratedCode(generatedCode, "src/test/resources/common/greetings_http_service.bal");
     }
 
+    @Test
+    public void testHTTPInterceptorIRCodeGeneration() {
+        BallerinaModel.Parameter requestContext = new BallerinaModel.Parameter(
+                "requestContext", typeFrom("http:RequestContext"));
+        BallerinaModel.Parameter request = new BallerinaModel.Parameter("request", typeFrom("http:Request"));
+        BallerinaModel.Parameter response = new BallerinaModel.Parameter("response", typeFrom("http:Response"));
+        BallerinaModel.Parameter error = new BallerinaModel.Parameter("err", typeFrom("error"));
+
+        BallerinaModel.Resource requestResource = new BallerinaModel.Resource("'default", "[string... path]",
+                List.of(requestContext, request), Optional.of(typeFrom("http:NextService|error?")),
+                List.of(stmtFrom("return requestContext.next();")));
+        BallerinaModel.Resource requestErrorResource = new BallerinaModel.Resource("'default", "[string... path]",
+                List.of(requestContext, request, error), Optional.of(typeFrom("http:Response|error")),
+                List.of(stmtFrom("return new;")));
+        BallerinaModel.Function responseFunction = new BallerinaModel.Function("interceptResponse",
+                List.of(requestContext, response), typeFrom("http:Response|error"),
+                List.of(stmtFrom("return response;")));
+        BallerinaModel.Function responseErrorFunction = new BallerinaModel.Function("interceptResponseError",
+                List.of(requestContext, response, error), typeFrom("http:Response|error"),
+                List.of(stmtFrom("return response;")));
+
+        BallerinaModel.Function initFunction = new BallerinaModel.Function("init", List.of(),
+                List.of(stmtFrom("self.name = \"request\";")));
+        List<BallerinaModel.HTTPInterceptor> interceptors = List.of(
+                new BallerinaModel.HTTPInterceptor.RequestInterceptor("RequestInterceptor",
+                        List.of(new BallerinaModel.ObjectField(typeFrom("string"), "name")),
+                        Optional.of(initFunction), requestResource),
+                new BallerinaModel.HTTPInterceptor.RequestErrorInterceptor(
+                        "RequestErrorInterceptor", requestErrorResource),
+                new BallerinaModel.HTTPInterceptor.ResponseErrorInterceptor(
+                        "ResponseErrorInterceptor", new BallerinaModel.Remote(responseErrorFunction)),
+                new BallerinaModel.HTTPInterceptor.ResponseInterceptor(
+                        "ResponseInterceptor", new BallerinaModel.Remote(responseFunction)));
+        BallerinaModel.Service service = new BallerinaModel.Service("/", List.of("listener"), Optional.empty(),
+                new ArrayList<>(), List.of(), List.of(), List.of(), Optional.empty(), interceptors, Optional.empty());
+        BallerinaModel.TextDocument document = new BallerinaModel.TextDocument("interceptors.bal",
+                List.of(new BallerinaModel.Import("ballerina", "http")), List.of(), List.of(),
+                List.of(new BallerinaModel.Listener.HTTPListener("listener", "9090", "0.0.0.0")),
+                List.of(service), List.of(), List.of(), List.of());
+
+        String source = document.toSource();
+        Assert.assertTrue(source.contains("service http:InterceptableService / on listener"));
+        Assert.assertTrue(source.contains("returns [RequestInterceptor, RequestErrorInterceptor, "
+                + "ResponseErrorInterceptor, ResponseInterceptor]"));
+        Assert.assertTrue(source.contains("*http:RequestInterceptor;"));
+        Assert.assertTrue(source.contains("*http:RequestErrorInterceptor;"));
+        Assert.assertTrue(source.contains("*http:ResponseErrorInterceptor;"));
+        Assert.assertTrue(source.contains("*http:ResponseInterceptor;"));
+        Assert.assertTrue(source.contains("string name;"));
+        Assert.assertTrue(source.contains("function init()"));
+    }
+
     private static void assertGeneratedCode(String actualCode, String pathToExpectedCode) {
         String expectedCode = getSourceText(Path.of(pathToExpectedCode));
         Assert.assertEquals(actualCode, expectedCode,

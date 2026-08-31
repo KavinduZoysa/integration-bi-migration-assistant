@@ -55,6 +55,29 @@ public class HttpListenerTest extends AbstractBlockTest {
     }
 
     @Test
+    public void testWildcardResourcePath() {
+        testMule3ToBal("http-listener/wildcard_resource_path.xml", "http-listener/wildcard_resource_path.bal");
+    }
+
+    @Test
+    public void testResponseBuilderGeneratesResponseInterceptor() {
+        testMule3ToBal("http-listener/listener_with_response_builder.xml",
+                "http-listener/listener_with_response_builder.bal");
+    }
+
+    @Test
+    public void testErrorResponseBuilderGeneratesResponseErrorInterceptor() {
+        testMule3ToBal("http-listener/listener_with_error_response_builder.xml",
+                "http-listener/listener_with_error_response_builder.bal");
+    }
+
+    @Test
+    public void testBothResponseBuildersGenerateBothInterceptors() {
+        testMule3ToBal("http-listener/listener_with_both_response_builders.xml",
+                "http-listener/listener_with_both_response_builders.bal");
+    }
+
+    @Test
     public void testQueryParams() {
         testMule3ToBal("http-listener/query_params.xml", "http-listener/query_params.bal");
     }

@@ -26,6 +26,7 @@ import mule.common.MuleLogger;
 import mule.v4.converter.ScriptConversionException;
 import mule.v4.model.MuleModel.AnypointMqSubscriber;
 import mule.v4.model.MuleModel.ApiKitConfig;
+import mule.v4.model.MuleModel.ApiKitRouter;
 import mule.v4.model.MuleModel.DbConfig;
 import mule.v4.model.MuleModel.DbGenericConnection;
 import mule.v4.model.MuleModel.PubSubMessageListener;
@@ -49,6 +50,7 @@ import static common.BallerinaModel.ClassDef;
 import static common.BallerinaModel.Expression;
 import static common.BallerinaModel.Expression.VariableReference;
 import static common.BallerinaModel.Function;
+import static common.BallerinaModel.HTTPInterceptor;
 import static common.BallerinaModel.Import;
 import static common.BallerinaModel.Listener;
 import static common.BallerinaModel.Remote;
@@ -75,6 +77,9 @@ import static mule.v4.ConversionUtils.getBallerinaAbsolutePath;
 import static mule.v4.ConversionUtils.getBallerinaResourcePath;
 import static mule.v4.ConversionUtils.insertLeadingSlash;
 import static mule.v4.converter.MuleConfigConverter.convertErrorHandlerRecords;
+import static mule.v4.converter.MuleConfigConverter.convertHttpResponseBody;
+import static mule.v4.converter.MuleConfigConverter.convertHttpResponseHeaders;
+import static mule.v4.converter.MuleConfigConverter.convertHttpResponseStatusCode;
 import static mule.v4.converter.MuleConfigConverter.convertTopLevelMuleBlocks;
 import static mule.v4.model.MuleModel.DbConnection;
 import static mule.v4.model.MuleModel.DbMySqlConnection;
@@ -86,6 +91,7 @@ import static mule.v4.model.MuleModel.Flow;
 import static mule.v4.model.MuleModel.GlobalProperty;
 import static mule.v4.model.MuleModel.HTTPListenerConfig;
 import static mule.v4.model.MuleModel.HttpListener;
+import static mule.v4.model.MuleModel.HttpResponse;
 import static mule.v4.model.MuleModel.Kind;
 import static mule.v4.model.MuleModel.MuleRecord;
 import static mule.v4.model.MuleModel.SubFlow;
@@ -254,19 +260,9 @@ public class MuleToBalConverter {
         String apiKitResourcePath = resourceData.resourcePath();
         String resourceMethod = resourceData.method();
 
-        // Get paths: serviceBasePath + apiKitBasePath + resourcePath
-        String httpBasePath = lastHttpService.basePath();
-        String apiKitBasePath = ctx.getApiKitBasePath(apiKit);
-        String combinedResourcePath = concatenatePaths(
-                concatenatePaths(httpBasePath, apiKitBasePath),
-                apiKitResourcePath);
-
-        // Store paths in context for apikit:router redirect logic
-        ctx.currentServiceBasePath = httpBasePath;
-        ctx.currentApiKitBasePath = apiKitBasePath;
-        ctx.currentResourcePath = combinedResourcePath;
-        HTTPListenerConfig listenerConfig = ctx.getDefaultHttpListenerConfig();
-        ctx.currentListenerPort = listenerConfig.port();
+        // A resource path is relative to the HTTP service base path.
+        String combinedResourcePath = apiKitResourcePath.startsWith("/")
+                ? apiKitResourcePath.substring(1) : apiKitResourcePath;
 
         List<Parameter> queryPrams = new ArrayList<>();
         queryPrams.add(new Parameter(Constants.HTTP_REQUEST_REF, typeFrom(Constants.HTTP_REQUEST_TYPE)));
@@ -560,7 +556,13 @@ public class MuleToBalConverter {
             String key = service.basePath() + "|" + service.listenerRefs();
             serviceMap.merge(key, service, (existing, current) -> {
                 existing.resources().addAll(current.resources());
-                return existing;
+                existing.httpInterceptors().addAll(current.httpInterceptors());
+                if (existing.apiKitRouterRef().isPresent() || current.apiKitRouterRef().isEmpty()) {
+                    return existing;
+                }
+                return new Service(existing.basePath(), existing.listenerRefs(), existing.initFunc(),
+                        existing.resources(), existing.functions(), existing.fields(), existing.remoteFunctions(),
+                        current.apiKitRouterRef(), existing.httpInterceptors(), existing.comment());
             });
         }
 
@@ -626,10 +628,146 @@ public class MuleToBalConverter {
         ctx.projectCtx.attributes.put(Constants.HTTP_RESPONSE_REF, HTTP_RESPONSE_TYPE);
         ctx.projectCtx.attributes.put(Constants.URI_PARAMS_REF, "map<string>");
 
-        // Create a service from the flow
-        Service service = genBalService(ctx, src, flow.flowBlocks(), functions);
+        HttpFlowSegments segments = splitHttpFlow(flow.flowBlocks());
+        Service service = genBalService(ctx, src, segments.serviceBlocks(), functions);
+        if (!segments.requestInterceptorBlocks().isEmpty()) {
+            service.httpInterceptors().add(genRequestInterceptor(ctx, segments.requestInterceptorBlocks()));
+        }
+        if (src.errorResponse().isPresent() || segments.errorHandler().isPresent()) {
+            service.httpInterceptors().add(genResponseErrorInterceptor(ctx, segments.errorHandler(),
+                    src.errorResponse()));
+        }
+        if (src.response().isPresent() || !segments.responseInterceptorBlocks().isEmpty()) {
+            service.httpInterceptors().add(genResponseInterceptor(ctx, segments.responseInterceptorBlocks(),
+                    src.response()));
+        }
         services.add(service);
         return service;
+    }
+
+    private static HttpFlowSegments splitHttpFlow(List<MuleRecord> flowBlocks) {
+        // A flow declares at most one error handler and it is always the last block of the flow.
+        boolean hasErrorHandler = !flowBlocks.isEmpty() && flowBlocks.getLast() instanceof ErrorHandler;
+        List<MuleRecord> blocks = hasErrorHandler
+                ? flowBlocks.subList(0, flowBlocks.size() - 1) : flowBlocks;
+
+        int routerIndex = -1;
+        for (int i = 0; i < blocks.size(); i++) {
+            if (blocks.get(i) instanceof ApiKitRouter) {
+                routerIndex = i;
+                break;
+            }
+        }
+        if (routerIndex < 0) {
+            return new HttpFlowSegments(List.of(), flowBlocks, List.of(), Optional.empty());
+        }
+
+        return new HttpFlowSegments(
+                List.copyOf(blocks.subList(0, routerIndex)),
+                List.of(blocks.get(routerIndex)),
+                List.copyOf(blocks.subList(routerIndex + 1, blocks.size())),
+                hasErrorHandler ? Optional.of((ErrorHandler) flowBlocks.getLast()) : Optional.empty());
+    }
+
+    private static HTTPInterceptor genRequestInterceptor(Context ctx, List<MuleRecord> flowBlocks) {
+        ctx.inServiceGen = true;
+        List<Statement> body = new ArrayList<>();
+        body.add(stmtFrom("Context %s = {%s: {%s: %s, %s: new}};".formatted(
+                Constants.CONTEXT_REFERENCE, Constants.ATTRIBUTES_REF, Constants.HTTP_REQUEST_REF,
+                Constants.HTTP_REQUEST_REF, Constants.HTTP_RESPONSE_REF)));
+        body.addAll(convertTopLevelMuleBlocks(ctx, flowBlocks));
+        body.add(stmtFrom("return requestContext.next();"));
+
+        List<Parameter> parameters = List.of(
+                new Parameter("requestContext", typeFrom("http:RequestContext")),
+                new Parameter(Constants.HTTP_REQUEST_REF, typeFrom(Constants.HTTP_REQUEST_TYPE)));
+        Resource resource = new Resource("'default", "[string... path]", parameters,
+                Optional.of(typeFrom("http:NextService|error?")), body);
+        String className = "MuleRequestInterceptor" + ctx.projectCtx.counters.requestInterceptorCount++;
+        Optional<Function> initFunction = ctx.initFunctionBody.isEmpty()
+                ? Optional.empty() : ctx.getServiceInitFunction();
+        HTTPInterceptor interceptor = new HTTPInterceptor.RequestInterceptor(className,
+                new ArrayList<>(ctx.serviceFields), initFunction, resource);
+        ctx.resetServiceState();
+        return interceptor;
+    }
+
+    private static HTTPInterceptor genResponseInterceptor(Context ctx, List<MuleRecord> flowBlocks,
+                                                          Optional<HttpResponse> httpResponse) {
+        ctx.inServiceGen = true;
+        List<Statement> body = new ArrayList<>();
+        body.add(stmtFrom("Context %s = {%s: {%s: %s}};".formatted(Constants.CONTEXT_REFERENCE,
+                Constants.ATTRIBUTES_REF, Constants.HTTP_RESPONSE_REF, Constants.HTTP_RESPONSE_REF)));
+        body.addAll(convertTopLevelMuleBlocks(ctx, flowBlocks));
+        httpResponse.flatMap(HttpResponse::body)
+                .ifPresent(bodyScript -> body.addAll(convertHttpResponseBody(ctx, bodyScript)));
+        body.add(stmtFrom("(<%s>%s.%s).setPayload(%s.payload);".formatted(HTTP_RESPONSE_TYPE,
+                Constants.ATTRIBUTES_FIELD_ACCESS, Constants.HTTP_RESPONSE_REF, Constants.CONTEXT_REFERENCE)));
+        httpResponse.ifPresent(response -> {
+            body.addAll(convertHttpResponseHeaders(ctx, response.headers(), Constants.HTTP_RESPONSE_REF));
+            body.addAll(convertHttpResponseStatusCode(ctx, response.statusCode(), Constants.HTTP_RESPONSE_REF));
+        });
+        body.add(stmtFrom("return %s;".formatted(Constants.HTTP_RESPONSE_REF)));
+
+        List<Parameter> parameters = List.of(
+                new Parameter("requestContext", typeFrom("http:RequestContext")),
+                new Parameter(Constants.HTTP_RESPONSE_REF, typeFrom(HTTP_RESPONSE_TYPE)));
+        Function function = new Function("interceptResponse", parameters, typeFrom("http:Response|error"), body);
+        String className = "MuleResponseInterceptor" + ctx.projectCtx.counters.responseInterceptorCount++;
+        Optional<Function> initFunction = ctx.initFunctionBody.isEmpty()
+                ? Optional.empty() : ctx.getServiceInitFunction();
+        HTTPInterceptor interceptor = new HTTPInterceptor.ResponseInterceptor(className,
+                new ArrayList<>(ctx.serviceFields), initFunction, new Remote(function));
+        ctx.resetServiceState();
+        return interceptor;
+    }
+
+    private static HTTPInterceptor genResponseErrorInterceptor(Context ctx, Optional<ErrorHandler> errorHandler,
+                                                               Optional<HttpResponse> httpErrorResponse) {
+        ctx.inServiceGen = true;
+        String interceptedResponse = "interceptedResponse";
+        List<Statement> body = new ArrayList<>();
+        body.add(stmtFrom("Context %s = {%s: {%s: %s}};".formatted(Constants.CONTEXT_REFERENCE,
+                Constants.ATTRIBUTES_REF, Constants.HTTP_RESPONSE_REF, interceptedResponse)));
+        errorHandler.ifPresent(handler -> body.addAll(convertErrorHandler(ctx, handler)));
+        httpErrorResponse.flatMap(HttpResponse::body)
+                .ifPresent(bodyScript -> body.addAll(convertHttpResponseBody(ctx, bodyScript)));
+        body.add(stmtFrom("(<%s>%s.%s).setPayload(%s.payload);".formatted(HTTP_RESPONSE_TYPE,
+                Constants.ATTRIBUTES_FIELD_ACCESS, Constants.HTTP_RESPONSE_REF, Constants.CONTEXT_REFERENCE)));
+        httpErrorResponse.ifPresent(response -> {
+            body.addAll(convertHttpResponseHeaders(ctx, response.headers(), interceptedResponse));
+            body.addAll(convertHttpResponseStatusCode(ctx, response.statusCode(), interceptedResponse));
+        });
+        body.add(stmtFrom("return <%s>%s.%s;".formatted(HTTP_RESPONSE_TYPE,
+                Constants.ATTRIBUTES_FIELD_ACCESS, Constants.HTTP_RESPONSE_REF)));
+
+        List<Parameter> parameters = List.of(
+                new Parameter("requestContext", typeFrom("http:RequestContext")),
+                new Parameter(interceptedResponse, typeFrom(HTTP_RESPONSE_TYPE)),
+                new Parameter(Constants.ON_FAIL_ERROR_VAR_REF, typeFrom("error")));
+        Function function = new Function("interceptResponseError", parameters,
+                typeFrom("http:Response|error"), body);
+        String className = "MuleResponseErrorInterceptor"
+                + ctx.projectCtx.counters.responseErrorInterceptorCount++;
+        Optional<Function> initFunction = ctx.initFunctionBody.isEmpty()
+                ? Optional.empty() : ctx.getServiceInitFunction();
+        HTTPInterceptor interceptor = new HTTPInterceptor.ResponseErrorInterceptor(className,
+                new ArrayList<>(ctx.serviceFields), initFunction, new Remote(function));
+        ctx.resetServiceState();
+        return interceptor;
+    }
+
+    private static List<Statement> convertErrorHandler(Context ctx, ErrorHandler errorHandler) {
+        if (errorHandler.ref().isEmpty()) {
+            return convertErrorHandlerRecords(ctx, errorHandler.errorHandlers());
+        }
+        String functionName = convertToBalIdentifier(errorHandler.ref());
+        return List.of(stmtFrom("%s(%s, %s);".formatted(functionName,
+                Constants.CONTEXT_REFERENCE, Constants.ON_FAIL_ERROR_VAR_REF)));
+    }
+
+    private record HttpFlowSegments(List<MuleRecord> requestInterceptorBlocks, List<MuleRecord> serviceBlocks,
+                                    List<MuleRecord> responseInterceptorBlocks, Optional<ErrorHandler> errorHandler) {
     }
 
     public static List<ModuleTypeDef> createContextTypeDefns(Context ctx) {
@@ -719,6 +857,11 @@ public class MuleToBalConverter {
                                          Set<Function> functions)
             throws ScriptConversionException {
         ctx.inServiceGen = true;
+        Optional<String> apiKitRouterRef = flowBlocks.stream()
+                .filter(ApiKitRouter.class::isInstance)
+                .map(ApiKitRouter.class::cast)
+                .map(ApiKitRouter::configRef)
+                .findFirst();
         List<String> pathParams = new ArrayList<>();
         String resourcePath = getBallerinaResourcePath(ctx, httpListener.resourcePath(), pathParams);
         String[] resourceMethodNames = httpListener.allowedMethods();
@@ -736,11 +879,6 @@ public class MuleToBalConverter {
         bodyStmts.add(stmtFrom("Context %s = {%s: %s};".formatted(Constants.CONTEXT_REFERENCE,
                 Constants.ATTRIBUTES_REF, attributesInitValue)));
 
-        // Set context for apikit-router comment generation
-        ctx.currentServiceBasePath = basePath;
-        ctx.currentResourcePath = resourcePath;
-        ctx.currentListenerPort = listenerConfig.port();
-
         List<Statement> bodyCoreStmts = convertTopLevelMuleBlocks(ctx, flowBlocks);
         bodyStmts.addAll(bodyCoreStmts);
 
@@ -754,8 +892,16 @@ public class MuleToBalConverter {
         List<Resource> resources = new ArrayList<>();
         TypeDesc returnType = typeFrom(Constants.HTTP_RESOURCE_RETURN_TYPE_DEFAULT);
         ctx.currentFileCtx.balConstructs.imports.add(Constants.HTTP_MODULE_IMPORT);
-
-        if (resourceMethodNames.length > 1) {
+        if (apiKitRouterRef.isPresent()) {
+            // APIKit implementation flows add the concrete resources to this service. Keep the listener
+            // resource as a fallback so paths accepted by the listener, but not matched by APIKit, fail
+            // through the service's response-error interceptor and Mule error handler.
+            List<Statement> fallbackBody = List.of(stmtFrom("return error(\"APIKIT:NOT_FOUND\");"));
+            for (String resourceMethodName : resourceMethodNames) {
+                resources.add(new Resource(resourceMethodName.toLowerCase(), resourcePath, queryPrams,
+                        Optional.of(returnType), fallbackBody));
+            }
+        } else if (resourceMethodNames.length > 1) {
             // same logic is shared, thus extracting it to a function
             String invokeEndPointMethodName = String.format(Constants.FUNC_NAME_HTTP_ENDPOINT_TEMPLATE,
                     ctx.projectCtx.counters.invokeEndPointMethodCount++);
@@ -785,7 +931,7 @@ public class MuleToBalConverter {
         Service service =
                 new Service(basePath, List.of(listenerRef), ctx.getServiceInitFunction(), resources, List.of(),
                         new ArrayList<>(ctx.serviceFields),
-                        List.of(), Optional.empty());
+                        List.of(), apiKitRouterRef, new ArrayList<>(), Optional.empty());
         ctx.resetServiceState();
         return service;
     }

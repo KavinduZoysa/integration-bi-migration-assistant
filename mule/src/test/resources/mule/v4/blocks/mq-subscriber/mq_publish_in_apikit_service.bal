@@ -27,34 +27,10 @@ service / on http\-listener\-config {
     }
 
     resource function default api(http:Request request) returns http:Response|error {
-        Context ctx = {attributes: {request, response: new}};
-        http:Client apiKitClient = check new ("http://localhost:8081");
-        string apiKitRedirectPath = "/apikit0/" + request.rawPath.substring("/".length() + "api".length());
-        match request.method {
-            "GET" => {
-                ctx.payload = check apiKitClient->get(apiKitRedirectPath);
-            }
-            "POST" => {
-                ctx.payload = check apiKitClient->post(apiKitRedirectPath, check request.getJsonPayload());
-            }
-            "PUT" => {
-                ctx.payload = check apiKitClient->put(apiKitRedirectPath, check request.getJsonPayload());
-            }
-            "DELETE" => {
-                ctx.payload = check apiKitClient->delete(apiKitRedirectPath, check request.getJsonPayload());
-            }
-            _ => {
-                panic error("Method not allowed");
-            }
-        }
-
-        // TODO: try to directly call the endpoints generated for the api kit
-
-        (<http:Response>ctx.attributes.response).setPayload(ctx.payload);
-        return <http:Response>ctx.attributes.response;
+        return error("APIKIT:NOT_FOUND");
     }
 
-    resource function post apikit0/orders(http:Request request) returns http:Response|error {
+    resource function post orders(http:Request request) returns http:Response|error {
         Context ctx = {attributes: {request, response: new}};
         log:printInfo("Processing new order");
         jms:MapMessage jmsMessage0 = {

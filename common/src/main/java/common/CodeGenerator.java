@@ -18,6 +18,8 @@
 package common;
 
 import common.BallerinaModel.ClassDef;
+import common.BallerinaModel.HTTPInterceptor;
+import io.ballerina.compiler.syntax.tree.ClassDefinitionNode;
 import io.ballerina.compiler.syntax.tree.FunctionBodyBlockNode;
 import io.ballerina.compiler.syntax.tree.FunctionDefinitionNode;
 import io.ballerina.compiler.syntax.tree.ImportDeclarationNode;
@@ -98,8 +100,9 @@ public class CodeGenerator {
         for (Service service : textDocument.services()) {
             String listenerRefs = constructCommaSeparatedString(service.listenerRefs());
             String comment = service.comment().isPresent() ? service.comment().get().toString() : "";
+            String serviceType = service.httpInterceptors().isEmpty() ? "" : "http:InterceptableService ";
             ServiceDeclarationNode serviceDecl = (ServiceDeclarationNode) NodeParser.parseModuleMemberDeclaration(
-                    String.format("%sservice %s on %s { }", comment, service.basePath(), listenerRefs));
+                    String.format("%sservice %s%s on %s { }", comment, serviceType, service.basePath(), listenerRefs));
 
             List<Node> members = new ArrayList<>();
             for (ObjectField field : service.fields()) {
@@ -110,6 +113,18 @@ public class CodeGenerator {
 
             if (service.initFunc().isPresent()) {
                 members.add(genFunctionDefinitionNode(service.initFunc().get()));
+            }
+
+            if (!service.httpInterceptors().isEmpty()) {
+                String returnType = service.httpInterceptors().stream()
+                        .map(HTTPInterceptor::className)
+                        .collect(Collectors.joining(", ", "[", "]"));
+                String instances = service.httpInterceptors().stream()
+                        .map(interceptor -> "new " + interceptor.className() + "()")
+                        .collect(Collectors.joining(", ", "[", "]"));
+                members.add(NodeParser.parseObjectMember(
+                        "public function createInterceptors() returns %s { return %s; }"
+                                .formatted(returnType, instances)));
             }
 
             for (Resource resource : service.resources()) {
@@ -146,6 +161,11 @@ public class CodeGenerator {
             NodeList<Node> nodeList = NodeFactory.createNodeList(members);
             serviceDecl = serviceDecl.modify().withMembers(nodeList).apply();
             moduleMembers.add(serviceDecl);
+        }
+
+        for (HTTPInterceptor interceptor : textDocument.services().stream()
+                .flatMap(service -> service.httpInterceptors().stream()).distinct().toList()) {
+            moduleMembers.add(generateHTTPInterceptor(interceptor));
         }
 
         for (ClassDef classDef : textDocument.classDefs()) {
@@ -203,6 +223,59 @@ public class CodeGenerator {
             syntaxTree = formatSyntaxTree(syntaxTree);
         }
         return syntaxTree;
+    }
+
+    private ModuleMemberDeclarationNode generateHTTPInterceptor(HTTPInterceptor interceptor) {
+        String inclusion;
+        Node interceptorMethod;
+        switch (interceptor) {
+            case HTTPInterceptor.RequestInterceptor requestInterceptor -> {
+                inclusion = "http:RequestInterceptor";
+                interceptorMethod = generateResourceMethod(requestInterceptor.resource());
+            }
+            case HTTPInterceptor.ResponseInterceptor responseInterceptor -> {
+                inclusion = "http:ResponseInterceptor";
+                interceptorMethod = generateRemoteMethod(responseInterceptor.remote());
+            }
+            case HTTPInterceptor.RequestErrorInterceptor requestErrorInterceptor -> {
+                inclusion = "http:RequestErrorInterceptor";
+                interceptorMethod = generateResourceMethod(requestErrorInterceptor.resource());
+            }
+            case HTTPInterceptor.ResponseErrorInterceptor responseErrorInterceptor -> {
+                inclusion = "http:ResponseErrorInterceptor";
+                interceptorMethod = generateRemoteMethod(responseErrorInterceptor.remote());
+            }
+        }
+
+        List<Node> members = new ArrayList<>();
+        members.add(NodeParser.parseObjectMember("*%s;".formatted(inclusion)));
+        for (ObjectField field : interceptor.fields()) {
+            members.add(NodeParser.parseObjectMember("%s %s;".formatted(field.type(), field.name())));
+        }
+        interceptor.initFunc().ifPresent(function -> members.add(genFunctionDefinitionNode(function)));
+        members.add(interceptorMethod);
+
+        ClassDefinitionNode classDefinition = (ClassDefinitionNode) NodeParser.parseModuleMemberDeclaration(
+                "service class %s { }".formatted(interceptor.className()));
+        return classDefinition.modify().withMembers(NodeFactory.createNodeList(members)).apply();
+    }
+
+    private FunctionDefinitionNode generateResourceMethod(Resource resource) {
+        String parameters = constructFunctionParameterString(resource.parameters(), false);
+        FunctionDefinitionNode method = (FunctionDefinitionNode) NodeParser.parseObjectMember(
+                "resource function %s %s(%s) %s {}".formatted(resource.resourceMethodName(), resource.path(),
+                        parameters, getReturnTypeDescriptor(resource.returnType())));
+        return method.modify().withFunctionBody(constructFunctionBodyBlock(resource.body())).apply();
+    }
+
+    private FunctionDefinitionNode generateRemoteMethod(Remote remote) {
+        Function function = remote.function();
+        String parameters = constructFunctionParameterString(function.parameters(), false);
+        FunctionDefinitionNode method = (FunctionDefinitionNode) NodeParser.parseObjectMember(
+                "remote function %s(%s) %s {}".formatted(function.functionName(), parameters,
+                        getReturnTypeDescriptor(function.returnType())));
+        return method.modify().withFunctionBody(
+                constructFunctionBodyBlock(((BallerinaModel.BlockFunctionBody) function.body()).statements())).apply();
     }
 
     private FunctionDefinitionNode genFunctionDefinitionNode(Function function) {
