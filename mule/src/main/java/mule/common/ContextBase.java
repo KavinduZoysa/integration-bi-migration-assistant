@@ -18,6 +18,9 @@
 package mule.common;
 
 import common.BallerinaModel;
+import common.BallerinaModel.Import;
+import common.BallerinaModel.ModuleTypeDef;
+import common.BallerinaModel.ModuleVar;
 import mule.MuleMigrator.MuleVersion;
 import org.jetbrains.annotations.NotNull;
 
@@ -117,6 +120,7 @@ public abstract class ContextBase {
      *
      * @return the project resources directory, or empty when the source layout is unknown
      */
+    @NotNull
     public Optional<Path> getMuleResourcesDir() {
         if (muleAppDir == null || muleAppDir.getParent() == null) {
             return Optional.empty();
