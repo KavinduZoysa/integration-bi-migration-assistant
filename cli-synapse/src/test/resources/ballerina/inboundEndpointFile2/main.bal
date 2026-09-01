@@ -1,15 +1,15 @@
 import ballerina/file;
 import ballerina/log;
 
-configurable string FileArchiveInboundPath = "/data/in";
+configurable string fileArchiveInboundPath = "/data/in";
 
-public listener file:Listener FileArchiveInboundListener = new (
-    path = FileArchiveInboundPath,
+public listener file:Listener fileArchiveInboundListener = new (
+    path = fileArchiveInboundPath,
     recursive = false
 );
 
 // Synapse VFS inbound endpoints process each discovered file exactly once; there is no onModify equivalent.
-service on FileArchiveInboundListener {
+service on fileArchiveInboundListener {
     remote function onCreate(file:FileEvent event) returns error? {
         Context ctx = {variables: {}};
         do {

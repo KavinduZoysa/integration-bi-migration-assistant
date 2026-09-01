@@ -1,12 +1,12 @@
 import ballerina/http;
 import ballerina/log;
 
-configurable int UnresolvedInboundPort = 8087;
-configurable string UnresolvedInboundHost = "0.0.0.0";
+configurable int unresolvedInboundPort = 8087;
+configurable string unresolvedInboundHost = "0.0.0.0";
 
-public listener http:Listener UnresolvedInboundListener = new (UnresolvedInboundPort, {host: UnresolvedInboundHost});
+public listener http:Listener unresolvedInboundListener = new (unresolvedInboundPort, {host: unresolvedInboundHost});
 
-service / on UnresolvedInboundListener {
+service / on unresolvedInboundListener {
     resource function 'default [string... path](http:Caller caller, http:Request request) returns error? {
         Context ctx = {variables: {}, caller: caller};
         do {

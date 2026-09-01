@@ -80,7 +80,6 @@ public class ConversionContext {
     private JavaSourceResolver javaSourceResolver = new JavaSourceResolver(List.of());
     private String currentFile = "";
     private boolean sharedListenerDeclared;
-    private boolean anyListenerWritten;
 
     public void setDependencyGraph(DependencyGraph dependencyGraph) {
         this.dependencyGraph = dependencyGraph;
@@ -126,21 +125,6 @@ public class ConversionContext {
 
     public void setSharedListenerDeclared(boolean sharedListenerDeclared) {
         this.sharedListenerDeclared = sharedListenerDeclared;
-    }
-
-    /**
-     * Whether any listener at all — the shared one or an {@code <inboundEndpoint>}'s dedicated one — has
-     * been written to {@code main.bal} yet, across every round so far. Used to decide, once every
-     * artifact has been converted, whether the shared listener must still be added as a fallback so the
-     * generated package always has at least one runnable listener; survives {@link #clearArtifactOutput()}
-     * for the same reason {@link #isSharedListenerDeclared()} does.
-     */
-    public boolean isAnyListenerWritten() {
-        return anyListenerWritten;
-    }
-
-    public void setAnyListenerWritten(boolean anyListenerWritten) {
-        this.anyListenerWritten = anyListenerWritten;
     }
 
     /**

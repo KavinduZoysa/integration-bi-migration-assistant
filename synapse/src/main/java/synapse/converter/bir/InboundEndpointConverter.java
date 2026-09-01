@@ -136,7 +136,8 @@ public class InboundEndpointConverter implements BIRConverter<ConversionContext>
     // https models server-authentication TLS only (keystore); mutual TLS and every other TLS parameter
     // still fall through to reportUnsupportedParameter below.
     private static void convertHttp(InboundEndpoint inboundEndpoint, ConversionContext context) {
-        String listenerName = inboundEndpoint.name() + LISTENER_SUFFIX;
+        String baseName = ConversionUtils.lowerFirst(inboundEndpoint.name());
+        String listenerName = baseName + LISTENER_SUFFIX;
         String port = DEFAULT_PORT;
         String host = DEFAULT_HOST;
         for (Param parameter : inboundEndpoint.parameters()) {
@@ -147,8 +148,8 @@ public class InboundEndpointConverter implements BIRConverter<ConversionContext>
             }
         }
 
-        String portVar = inboundEndpoint.name() + "Port";
-        String hostVar = inboundEndpoint.name() + "Host";
+        String portVar = baseName + "Port";
+        String hostVar = baseName + "Host";
         context.addModuleVar(ModuleVar.configurable(portVar, INT, ConversionUtils.exprFrom(port)));
         context.addModuleVar(ModuleVar.configurable(hostVar, STRING, new StringConstant(host)));
         Optional<Expression> secureSocket = inboundEndpoint.keyStore()
@@ -181,8 +182,9 @@ public class InboundEndpointConverter implements BIRConverter<ConversionContext>
         if (keyStore.keyPassword().isPresent() && !keyStore.keyPassword().get().equals(keyStore.password())) {
             reportUnmodeledKeyPassword(inboundEndpoint, context);
         }
-        String keyStorePathVar = inboundEndpoint.name() + "KeyStorePath";
-        String keyStorePasswordVar = inboundEndpoint.name() + "KeyStorePassword";
+        String baseName = ConversionUtils.lowerFirst(inboundEndpoint.name());
+        String keyStorePathVar = baseName + "KeyStorePath";
+        String keyStorePasswordVar = baseName + "KeyStorePassword";
         context.addModuleVar(ModuleVar.configurable(keyStorePathVar, STRING, new StringConstant(
                 keyStore.location())));
         context.addModuleVar(ModuleVar.configurable(keyStorePasswordVar, STRING, new StringConstant(
@@ -198,7 +200,8 @@ public class InboundEndpointConverter implements BIRConverter<ConversionContext>
     // its sequence is reported instead of converted (see RespondConverter), and its default fault
     // handler only logs (see FaultSequenceConverter).
     private static void convertJms(InboundEndpoint inboundEndpoint, ConversionContext context) {
-        String listenerName = inboundEndpoint.name() + LISTENER_SUFFIX;
+        String baseName = ConversionUtils.lowerFirst(inboundEndpoint.name());
+        String listenerName = baseName + LISTENER_SUFFIX;
         Optional<String> initialContextFactory = Optional.empty();
         Optional<String> providerUrl = Optional.empty();
         Optional<String> destinationName = Optional.empty();
@@ -225,8 +228,8 @@ public class InboundEndpointConverter implements BIRConverter<ConversionContext>
                     : JMS_PASSWORD_PARAM, context);
         }
 
-        String initialContextFactoryVar = inboundEndpoint.name() + "InitialContextFactory";
-        String providerUrlVar = inboundEndpoint.name() + "ProviderUrl";
+        String initialContextFactoryVar = baseName + "InitialContextFactory";
+        String providerUrlVar = baseName + "ProviderUrl";
         context.addModuleVar(ModuleVar.configurable(initialContextFactoryVar, STRING,
                 new StringConstant(initialContextFactory.orElse(""))));
         context.addModuleVar(ModuleVar.configurable(providerUrlVar, STRING,
@@ -235,8 +238,8 @@ public class InboundEndpointConverter implements BIRConverter<ConversionContext>
         Optional<Expression> usernameExpr = Optional.empty();
         Optional<Expression> passwordExpr = Optional.empty();
         if (username.isPresent() && password.isPresent()) {
-            String usernameVar = inboundEndpoint.name() + "Username";
-            String passwordVar = inboundEndpoint.name() + "Password";
+            String usernameVar = baseName + "Username";
+            String passwordVar = baseName + "Password";
             context.addModuleVar(ModuleVar.configurable(usernameVar, STRING, new StringConstant(username.get())));
             context.addModuleVar(ModuleVar.configurable(passwordVar, STRING, new StringConstant(password.get())));
             usernameExpr = Optional.of(new VariableReference(usernameVar));
@@ -296,7 +299,8 @@ public class InboundEndpointConverter implements BIRConverter<ConversionContext>
     // A Synapse file (VFS) inbound endpoint polls and processes each discovered file exactly once
     // (poll -> mediate -> move/delete) with no create/modify distinction, so only onCreate is generated.
     private static void convertFile(InboundEndpoint inboundEndpoint, ConversionContext context) {
-        String listenerName = inboundEndpoint.name() + LISTENER_SUFFIX;
+        String baseName = ConversionUtils.lowerFirst(inboundEndpoint.name());
+        String listenerName = baseName + LISTENER_SUFFIX;
         Optional<String> fileUri = Optional.empty();
         for (Param parameter : inboundEndpoint.parameters()) {
             if (FILE_URI_PARAM.equals(parameter.name())) {
@@ -316,7 +320,7 @@ public class InboundEndpointConverter implements BIRConverter<ConversionContext>
             }
         }
 
-        String pathVar = inboundEndpoint.name() + "Path";
+        String pathVar = baseName + "Path";
         context.addModuleVar(ModuleVar.configurable(pathVar, STRING,
                 new StringConstant(toLocalPath(fileUri.orElse("")))));
         context.addListener(new FileListener(listenerName, new VariableReference(pathVar), false));

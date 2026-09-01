@@ -1,14 +1,14 @@
 import ballerina/http;
 import ballerina/log;
 
-configurable int SecureInboundEndpointPort = 8343;
-configurable string SecureInboundEndpointHost = "0.0.0.0";
-configurable string SecureInboundEndpointKeyStorePath = "repository/resources/security/wso2carbon.jks";
-configurable string SecureInboundEndpointKeyStorePassword = "wso2carbon";
+configurable int secureInboundEndpointPort = 8343;
+configurable string secureInboundEndpointHost = "0.0.0.0";
+configurable string secureInboundEndpointKeyStorePath = "repository/resources/security/wso2carbon.jks";
+configurable string secureInboundEndpointKeyStorePassword = "wso2carbon";
 
-public listener http:Listener SecureInboundEndpointListener = new (SecureInboundEndpointPort, {host: SecureInboundEndpointHost, secureSocket: {key: {path: SecureInboundEndpointKeyStorePath, password: SecureInboundEndpointKeyStorePassword}}});
+public listener http:Listener secureInboundEndpointListener = new (secureInboundEndpointPort, {host: secureInboundEndpointHost, secureSocket: {key: {path: secureInboundEndpointKeyStorePath, password: secureInboundEndpointKeyStorePassword}}});
 
-service / on SecureInboundEndpointListener {
+service / on secureInboundEndpointListener {
     resource function 'default [string... path](http:Caller caller, http:Request request) returns error? {
         Context ctx = {variables: {}, caller: caller};
         // TODO: Unresolved Synapse fault sequence reference 'fault' (from inboundEndpoint.xml). Referenced fault sequence 'fault' was not found among the converted artifacts; falling back to the default error handler.

@@ -14,12 +14,12 @@ service /mixed on httpListener {
     }
 }
 
-configurable int MixedInboundPort = 8089;
-configurable string MixedInboundHost = "0.0.0.0";
+configurable int mixedInboundPort = 8089;
+configurable string mixedInboundHost = "0.0.0.0";
 
-public listener http:Listener MixedInboundListener = new (MixedInboundPort, {host: MixedInboundHost});
+public listener http:Listener mixedInboundListener = new (mixedInboundPort, {host: mixedInboundHost});
 
-service / on MixedInboundListener {
+service / on mixedInboundListener {
     resource function 'default [string... path](http:Caller caller, http:Request request) returns error? {
         Context ctx = {variables: {}, caller: caller};
         do {

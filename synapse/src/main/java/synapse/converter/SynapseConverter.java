@@ -223,13 +223,9 @@ public final class SynapseConverter {
             context.classMediatorStubs().forEach(context::addFunction);
             addRespondFunction(context);
             addEmitPayloadFunction(context);
-            if (dependencyGraph.sortedNodes().isEmpty() || !context.records().isEmpty()) {
-                // Emit the base package skeleton when there were no convertible artifacts (e.g. a
-                // <proxy>), and flush the Context record to types.bal once every artifact's default
-                // properties have been collected.
-                ensureListenerSkeleton(context);
-                writeArtifacts(targetDir, context, writtenImports);
-            }
+            // Flush the Context record to types.bal now that every artifact's default properties have
+            // been collected.
+            writeArtifacts(targetDir, context, writtenImports);
             writeReport(targetDir, context);
         } catch (IOException e) {
             throw new RuntimeException("Error while writing the Ballerina package: ", e);
@@ -432,9 +428,6 @@ public final class SynapseConverter {
             context.setSharedListenerDeclared(true);
         }
         listeners.addAll(context.listeners());
-        if (!listeners.isEmpty()) {
-            context.setAnyListenerWritten(true);
-        }
         // main.bal only needs ballerina/http when it actually declares an HTTP listener: a jms/file-only
         // inbound endpoint's main.bal never references an http: type, so an unconditional import here
         // would be an unused-import compile error.
@@ -460,14 +453,6 @@ public final class SynapseConverter {
     private static boolean usesSharedListener(List<Service> services) {
         return services.stream()
                 .anyMatch(service -> service.listenerRefs().contains(APIConverter.DEFAULT_LISTENER_REF));
-    }
-
-    // Guarantees the generated package always has at least one runnable HTTP listener, even when nothing
-    // converted produced one of its own: falls back to the shared listener as a minimal skeleton.
-    private static void ensureListenerSkeleton(ConversionContext context) {
-        if (!context.isAnyListenerWritten()) {
-            context.addListener(new HTTPListener(APIConverter.DEFAULT_LISTENER_REF, DEFAULT_PORT, DEFAULT_HOST));
-        }
     }
 
     private static void writeToFile(Path file, Set<Import> imports, List<ModuleVar> moduleVars,

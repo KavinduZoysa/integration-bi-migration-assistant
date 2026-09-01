@@ -1,12 +1,12 @@
 import ballerina/http;
 import ballerina/log;
 
-configurable int NoErrorInboundPort = 8086;
-configurable string NoErrorInboundHost = "0.0.0.0";
+configurable int noErrorInboundPort = 8086;
+configurable string noErrorInboundHost = "0.0.0.0";
 
-public listener http:Listener NoErrorInboundListener = new (NoErrorInboundPort, {host: NoErrorInboundHost});
+public listener http:Listener noErrorInboundListener = new (noErrorInboundPort, {host: noErrorInboundHost});
 
-service / on NoErrorInboundListener {
+service / on noErrorInboundListener {
     resource function 'default [string... path](http:Caller caller, http:Request request) returns error? {
         Context ctx = {variables: {}, caller: caller};
         do {

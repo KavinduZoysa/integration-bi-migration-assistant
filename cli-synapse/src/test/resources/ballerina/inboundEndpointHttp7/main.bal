@@ -1,11 +1,11 @@
 import ballerina/http;
 
-configurable int SuspendedHttpInboundPort = 8085;
-configurable string SuspendedHttpInboundHost = "0.0.0.0";
+configurable int suspendedHttpInboundPort = 8085;
+configurable string suspendedHttpInboundHost = "0.0.0.0";
 
-public listener http:Listener SuspendedHttpInboundListener = new (SuspendedHttpInboundPort, {host: SuspendedHttpInboundHost});
+public listener http:Listener suspendedHttpInboundListener = new (suspendedHttpInboundPort, {host: suspendedHttpInboundHost});
 
-service / on SuspendedHttpInboundListener {
+service / on suspendedHttpInboundListener {
     resource function 'default [string... path](http:Caller caller, http:Request request) returns error? {
         Context ctx = {variables: {}, caller: caller};
         do {

@@ -77,6 +77,17 @@ public class ConversionUtils {
     }
 
     /**
+     * Lowercases the first character of an identifier, leaving the rest unchanged.
+     *
+     * @param identifier the original identifier string
+     * @return identifier with its first character lowercased
+     */
+    public static String lowerFirst(String identifier) {
+        return identifier.isEmpty() ? identifier
+                : Character.toLowerCase(identifier.charAt(0)) + identifier.substring(1);
+    }
+
+    /**
      * Inserts a single quote prefix to the variable name if it is a Ballerina keyword or starts with a digit.
      *
      * @param varName the variable name

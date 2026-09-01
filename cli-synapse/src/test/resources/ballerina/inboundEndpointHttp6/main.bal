@@ -1,12 +1,12 @@
 import ballerina/http;
 import ballerina/log;
 
-configurable int HttpInboundUnresolvedOnErrorPort = 8090;
-configurable string HttpInboundUnresolvedOnErrorHost = "0.0.0.0";
+configurable int httpInboundUnresolvedOnErrorPort = 8090;
+configurable string httpInboundUnresolvedOnErrorHost = "0.0.0.0";
 
-public listener http:Listener HttpInboundUnresolvedOnErrorListener = new (HttpInboundUnresolvedOnErrorPort, {host: HttpInboundUnresolvedOnErrorHost});
+public listener http:Listener httpInboundUnresolvedOnErrorListener = new (httpInboundUnresolvedOnErrorPort, {host: httpInboundUnresolvedOnErrorHost});
 
-service / on HttpInboundUnresolvedOnErrorListener {
+service / on httpInboundUnresolvedOnErrorListener {
     resource function 'default [string... path](http:Caller caller, http:Request request) returns error? {
         Context ctx = {variables: {}, caller: caller};
         // TODO: Unresolved Synapse fault sequence reference 'missingFaultSeq' (from inboundEndpoint.xml). Referenced fault sequence 'missingFaultSeq' was not found among the converted artifacts; falling back to the default error handler.

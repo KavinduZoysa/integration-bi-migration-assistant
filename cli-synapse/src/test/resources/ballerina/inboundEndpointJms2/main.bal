@@ -1,11 +1,11 @@
 import ballerina/log;
 import ballerinax/java.jms;
 
-configurable string TopicInboundInitialContextFactory = "";
-configurable string TopicInboundProviderUrl = "";
+configurable string topicInboundInitialContextFactory = "";
+configurable string topicInboundProviderUrl = "";
 
-public listener jms:Listener TopicInboundListener = new jms:Listener(
-    connectionConfig = {initialContextFactory: TopicInboundInitialContextFactory, providerUrl: TopicInboundProviderUrl},
+public listener jms:Listener topicInboundListener = new jms:Listener(
+    connectionConfig = {initialContextFactory: topicInboundInitialContextFactory, providerUrl: topicInboundProviderUrl},
     consumerOptions = {
         destination: {
             'type: jms:QUEUE,
@@ -14,7 +14,7 @@ public listener jms:Listener TopicInboundListener = new jms:Listener(
     }
 );
 
-service "TopicInbound" on TopicInboundListener {
+service "TopicInbound" on topicInboundListener {
     remote function onMessage(jms:Message message, jms:Caller caller) returns error? {
         Context ctx = {variables: {}};
         do {

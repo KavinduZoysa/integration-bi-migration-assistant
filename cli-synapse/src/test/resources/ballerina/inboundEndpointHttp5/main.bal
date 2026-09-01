@@ -1,11 +1,11 @@
 import ballerina/http;
 
-configurable int HttpInboundEPPort = 8085;
-configurable string HttpInboundEPHost = "0.0.0.0";
+configurable int httpInboundEPPort = 8085;
+configurable string httpInboundEPHost = "0.0.0.0";
 
-public listener http:Listener HttpInboundEPListener = new (HttpInboundEPPort, {host: HttpInboundEPHost});
+public listener http:Listener httpInboundEPListener = new (httpInboundEPPort, {host: httpInboundEPHost});
 
-service / on HttpInboundEPListener {
+service / on httpInboundEPListener {
     resource function 'default [string... path](http:Caller caller, http:Request request) returns error? {
         Context ctx = {variables: {}, caller: caller};
         do {

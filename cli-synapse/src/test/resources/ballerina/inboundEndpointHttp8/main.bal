@@ -1,12 +1,12 @@
 import ballerina/http;
 import ballerina/log;
 
-configurable int PlainHttpInboundPort = 8085;
-configurable string PlainHttpInboundHost = "0.0.0.0";
+configurable int plainHttpInboundPort = 8085;
+configurable string plainHttpInboundHost = "0.0.0.0";
 
-public listener http:Listener PlainHttpInboundListener = new (PlainHttpInboundPort, {host: PlainHttpInboundHost});
+public listener http:Listener plainHttpInboundListener = new (plainHttpInboundPort, {host: plainHttpInboundHost});
 
-service / on PlainHttpInboundListener {
+service / on plainHttpInboundListener {
     resource function 'default [string... path](http:Caller caller, http:Request request) returns error? {
         Context ctx = {variables: {}, caller: caller};
         do {

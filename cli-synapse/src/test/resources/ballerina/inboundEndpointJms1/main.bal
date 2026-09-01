@@ -2,13 +2,13 @@ import ballerina/log;
 import ballerinax/activemq.driver as _;
 import ballerinax/java.jms;
 
-configurable string OrderInboundInitialContextFactory = "org.apache.activemq.jndi.ActiveMQInitialContextFactory";
-configurable string OrderInboundProviderUrl = "tcp://localhost:61616";
-configurable string OrderInboundUsername = "admin";
-configurable string OrderInboundPassword = "admin";
+configurable string orderInboundInitialContextFactory = "org.apache.activemq.jndi.ActiveMQInitialContextFactory";
+configurable string orderInboundProviderUrl = "tcp://localhost:61616";
+configurable string orderInboundUsername = "admin";
+configurable string orderInboundPassword = "admin";
 
-public listener jms:Listener OrderInboundListener = new jms:Listener(
-    connectionConfig = {initialContextFactory: OrderInboundInitialContextFactory, providerUrl: OrderInboundProviderUrl, username: OrderInboundUsername, password: OrderInboundPassword},
+public listener jms:Listener orderInboundListener = new jms:Listener(
+    connectionConfig = {initialContextFactory: orderInboundInitialContextFactory, providerUrl: orderInboundProviderUrl, username: orderInboundUsername, password: orderInboundPassword},
     consumerOptions = {
         destination: {
             'type: jms:QUEUE,
@@ -17,7 +17,7 @@ public listener jms:Listener OrderInboundListener = new jms:Listener(
     }
 );
 
-service "OrderInbound" on OrderInboundListener {
+service "OrderInbound" on orderInboundListener {
     remote function onMessage(jms:Message message, jms:Caller caller) returns error? {
         Context ctx = {variables: {}};
         do {

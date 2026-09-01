@@ -1,12 +1,12 @@
 import ballerina/http;
 import ballerina/log;
 
-configurable int HttpsInboundPort = 8443;
-configurable string HttpsInboundHost = "0.0.0.0";
+configurable int httpsInboundPort = 8443;
+configurable string httpsInboundHost = "0.0.0.0";
 
-public listener http:Listener HttpsInboundListener = new (HttpsInboundPort, {host: HttpsInboundHost});
+public listener http:Listener httpsInboundListener = new (httpsInboundPort, {host: httpsInboundHost});
 
-service / on HttpsInboundListener {
+service / on httpsInboundListener {
     resource function 'default [string... path](http:Caller caller, http:Request request) returns error? {
         Context ctx = {variables: {}, caller: caller};
         do {

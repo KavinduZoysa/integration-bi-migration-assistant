@@ -2,11 +2,11 @@ import ballerina/log;
 import ballerinax/activemq.driver as _;
 import ballerinax/java.jms;
 
-configurable string JmsInboundInitialContextFactory = "org.apache.activemq.jndi.ActiveMQInitialContextFactory";
-configurable string JmsInboundProviderUrl = "";
+configurable string jmsInboundInitialContextFactory = "org.apache.activemq.jndi.ActiveMQInitialContextFactory";
+configurable string jmsInboundProviderUrl = "";
 
-public listener jms:Listener JmsInboundListener = new jms:Listener(
-    connectionConfig = {initialContextFactory: JmsInboundInitialContextFactory, providerUrl: JmsInboundProviderUrl},
+public listener jms:Listener jmsInboundListener = new jms:Listener(
+    connectionConfig = {initialContextFactory: jmsInboundInitialContextFactory, providerUrl: jmsInboundProviderUrl},
     consumerOptions = {
         destination: {
             'type: jms:QUEUE,
@@ -15,7 +15,7 @@ public listener jms:Listener JmsInboundListener = new jms:Listener(
     }
 );
 
-service "JmsInbound" on JmsInboundListener {
+service "JmsInbound" on jmsInboundListener {
     remote function onMessage(jms:Message message, jms:Caller caller) returns error? {
         Context ctx = {variables: {}};
         do {
