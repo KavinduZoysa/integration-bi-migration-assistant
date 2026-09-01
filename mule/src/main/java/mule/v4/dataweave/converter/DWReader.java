@@ -26,6 +26,7 @@ import mule.v4.dataweave.parser.DataWeaveParser;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,6 +35,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.Optional;
 
 import static common.BallerinaModel.Statement;
 import static common.ConversionUtils.stmtFrom;
@@ -187,7 +189,7 @@ public class DWReader {
             context.currentScriptContext = context.scriptCache.get(resourcePath);
             return buildStatement(context, varName);
         }
-        String resolvedPath = resourcePath.replace(Constants.CLASSPATH, Constants.CLASSPATH_DIR);
+        String resolvedPath = resolveResourcePath(resourcePath, ctx);
         String fileScript;
         try {
             fileScript = readDWScriptFromFile(resolvedPath);
@@ -212,6 +214,33 @@ public class DWReader {
         context.currentScriptContext.funcName = context.functionNames.getLast();
         context.scriptCache.put(resourcePath, context.currentScriptContext);
         return buildStatement(context, varName);
+    }
+
+    @NotNull
+    private static String resolveResourcePath(String resourcePath, Context ctx) {
+        String relativePath = stripClasspathPrefix(resourcePath);
+        if (!Paths.get(relativePath).isAbsolute()) {
+            Optional<Path> resourcesDir = ctx.getMuleResourcesDir();
+            if (resourcesDir.isPresent()) {
+                Path candidate = resourcesDir.get().resolve(relativePath);
+                if (Files.isRegularFile(candidate)) {
+                    return candidate.toString();
+                }
+            }
+        }
+        return resourcePath.replace(Constants.CLASSPATH, Constants.CLASSPATH_DIR);
+    }
+
+    @NotNull
+    private static String stripClasspathPrefix(String resourcePath) {
+        if (!resourcePath.startsWith(Constants.CLASSPATH)) {
+            return resourcePath;
+        }
+        String path = resourcePath.substring(Constants.CLASSPATH.length());
+        while (path.startsWith("/")) {
+            path = path.substring(1);
+        }
+        return path;
     }
 
     private static int countDWBodyLines(String script) {
