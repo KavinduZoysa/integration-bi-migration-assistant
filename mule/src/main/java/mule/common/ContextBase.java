@@ -34,6 +34,8 @@ import static common.BallerinaModel.ModuleVar;
 
 public abstract class ContextBase {
 
+    private static final String MULE_RESOURCES_DIR_NAME = "resources";
+
     protected final List<File> xmlFiles;
     public final List<File> yamlFiles;
     protected final Path muleAppDir;
@@ -108,6 +110,19 @@ public abstract class ContextBase {
      * @param tomlContent StringBuilder to append dependencies to
      */
     public abstract void appendJavaDependencies(StringBuilder tomlContent);
+
+    /**
+     * Returns the {@code src/main/resources} directory of the source Mule project, which is the root that
+     * {@code classpath:} resource references (and bare relative resource references) are resolved against.
+     *
+     * @return the project resources directory, or empty when the source layout is unknown
+     */
+    public Optional<Path> getMuleResourcesDir() {
+        if (muleAppDir == null || muleAppDir.getParent() == null) {
+            return Optional.empty();
+        }
+        return Optional.of(muleAppDir.getParent().resolve(MULE_RESOURCES_DIR_NAME));
+    }
 
     public String getOrgName() {
         return result == null ? "" : result.getOrgName();
