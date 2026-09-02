@@ -19,7 +19,9 @@ package synapse.converter;
 
 import common.BallerinaModel.Function;
 import common.BallerinaModel.Import;
+import common.BallerinaModel.Listener;
 import common.BallerinaModel.ModuleTypeDef;
+import common.BallerinaModel.ModuleVar;
 import common.BallerinaModel.Service;
 import org.jetbrains.annotations.NotNull;
 import synapse.converter.bir.mediators.classmediator.source.JavaSourceResolver;
@@ -63,6 +65,8 @@ public class ConversionContext {
     private final List<Service> services = new ArrayList<>();
     private final List<Function> functions = new ArrayList<>();
     private final List<ModuleTypeDef> records = new ArrayList<>();
+    private final List<Listener> listeners = new ArrayList<>();
+    private final List<ModuleVar> moduleVars = new ArrayList<>();
 
     private final Map<String, SequenceMetadata> sequenceMetadata = new HashMap<>();
     private final Map<String, Set<Import>> importsByFile = new HashMap<>();
@@ -75,6 +79,7 @@ public class ConversionContext {
     private DependencyGraph dependencyGraph;
     private JavaSourceResolver javaSourceResolver = new JavaSourceResolver(List.of());
     private String currentFile = "";
+    private boolean sharedListenerDeclared;
 
     public void setDependencyGraph(DependencyGraph dependencyGraph) {
         this.dependencyGraph = dependencyGraph;
@@ -109,6 +114,20 @@ public class ConversionContext {
     }
 
     /**
+     * Whether the shared HTTP listener every {@code <api>} service binds to has already been declared in
+     * {@code main.bal}. Set once, the first time an {@code <api>} artifact is converted, so later rounds
+     * (including inbound-endpoint-only ones) don't redeclare it; survives {@link #clearArtifactOutput()}
+     * since the shared listener, once written, must never be written again.
+     */
+    public boolean isSharedListenerDeclared() {
+        return sharedListenerDeclared;
+    }
+
+    public void setSharedListenerDeclared(boolean sharedListenerDeclared) {
+        this.sharedListenerDeclared = sharedListenerDeclared;
+    }
+
+    /**
      * Records an unsupported Synapse construct so it can be surfaced in the migration report. Populated
      * as artifacts are converted and preserved across {@link #clearArtifactOutput()}, since the report
      * is written once at the end of the whole run.
@@ -128,6 +147,38 @@ public class ConversionContext {
 
     public List<Service> services() {
         return services;
+    }
+
+    /**
+     * Registers a listener dedicated to the artifact currently being converted (e.g. the transport-level
+     * entry point an {@code <inboundEndpoint>} opens), as opposed to the single shared HTTP listener
+     * every {@code <api>} service binds to. Per-artifact output, like {@link #services()}: cleared by
+     * {@link #clearArtifactOutput()} once flushed.
+     */
+    public void addListener(Listener listener) {
+        assert listener != null : "listener must not be null";
+        listeners.add(listener);
+    }
+
+    @NotNull
+    public List<Listener> listeners() {
+        return listeners;
+    }
+
+    /**
+     * Registers a {@code configurable} module-level variable backing a listener setting that is inherently
+     * tied to the machine the config was authored on (a connection URL, credential, or filesystem path) so
+     * it can be overridden per deployment via {@code Config.toml} instead of requiring a source edit. Per-
+     * artifact output, like {@link #listeners()}: cleared by {@link #clearArtifactOutput()} once flushed.
+     */
+    public void addModuleVar(ModuleVar moduleVar) {
+        assert moduleVar != null : "moduleVar must not be null";
+        moduleVars.add(moduleVar);
+    }
+
+    @NotNull
+    public List<ModuleVar> moduleVars() {
+        return moduleVars;
     }
 
     public void addFunction(Function function) {
@@ -272,6 +323,8 @@ public class ConversionContext {
         services.clear();
         functions.clear();
         records.clear();
+        listeners.clear();
+        moduleVars.clear();
     }
 
     // Facts about a <sequence>, recorded once it has been converted, all falling out of the conversion

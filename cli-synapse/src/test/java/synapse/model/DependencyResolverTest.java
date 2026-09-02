@@ -46,6 +46,10 @@ public class DependencyResolverTest {
         return new ArtifactNode(Kind.API + ":" + name, name, Kind.API, file);
     }
 
+    private static ArtifactNode inboundEndpoint(String name, Path file) {
+        return new ArtifactNode(Kind.INBOUND_ENDPOINT + ":" + name, name, Kind.INBOUND_ENDPOINT, file);
+    }
+
     private static Set<String> ids(List<ArtifactNode> nodes) {
         return nodes.stream().map(ArtifactNode::id).collect(Collectors.toSet());
     }
@@ -90,6 +94,47 @@ public class DependencyResolverTest {
         assertEquals(ghost.name(), "ghost");
         assertEquals(ghost.kind(), Kind.SEQUENCE);
         assertNull(ghost.file());
+    }
+
+    @Test
+    public void inboundEndpointDependsOnSequenceAndOnError() {
+        Path dir = Path.of("src", "test", "resources", "dependency-graph", "inbound-endpoint");
+        ArtifactNode foo = sequence("foo", dir.resolve("foo.xml"));
+        ArtifactNode fault = sequence("fault", dir.resolve("fault.xml"));
+        ArtifactNode inbound = inboundEndpoint("HttpInbound", dir.resolve("inboundEndpoint.xml"));
+        DependencyResolver resolver = new DependencyResolver(List.of(foo, fault, inbound));
+
+        assertEquals(ids(resolver.resolve(inbound)), Set.of("SEQUENCE:foo", "SEQUENCE:fault"));
+        assertTrue(resolver.resolve(foo).isEmpty());
+        assertTrue(resolver.resolve(fault).isEmpty());
+        assertTrue(resolver.unresolvedNodes().isEmpty());
+    }
+
+    @Test
+    public void inboundEndpointFallsBackToFaultSequence() {
+        Path dir = Path.of("src", "test", "resources", "dependency-graph", "inbound-endpoint-implicit-fault");
+        ArtifactNode foo = sequence("foo", dir.resolve("foo.xml"));
+        ArtifactNode fault = sequence("fault", dir.resolve("fault.xml"));
+        ArtifactNode inbound = inboundEndpoint("NoErrorInbound", dir.resolve("inboundEndpoint.xml"));
+        DependencyResolver resolver = new DependencyResolver(List.of(foo, fault, inbound));
+
+        // No onError attribute at all: real Synapse falls through to the project's "fault" sequence,
+        // so the dependency graph must guarantee "fault" converts first even though nothing references
+        // it by key.
+        assertEquals(ids(resolver.resolve(inbound)), Set.of("SEQUENCE:foo", "SEQUENCE:fault"));
+        assertTrue(resolver.unresolvedNodes().isEmpty());
+    }
+
+    @Test
+    public void inboundEndpointIgnoresMissingFaultSequence() {
+        Path dir = Path.of("src", "test", "resources", "dependency-graph", "inbound-endpoint-implicit-fault");
+        ArtifactNode foo = sequence("foo", dir.resolve("foo.xml"));
+        ArtifactNode inbound = inboundEndpoint("NoErrorInbound", dir.resolve("inboundEndpoint.xml"));
+        DependencyResolver resolver = new DependencyResolver(List.of(foo, inbound));
+
+        // With no project-level "fault" sequence among the known artifacts, there's nothing to depend on.
+        assertEquals(ids(resolver.resolve(inbound)), Set.of("SEQUENCE:foo"));
+        assertTrue(resolver.unresolvedNodes().isEmpty());
     }
 
     @Test

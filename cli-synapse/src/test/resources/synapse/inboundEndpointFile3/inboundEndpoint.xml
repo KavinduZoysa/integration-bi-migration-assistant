@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inboundEndpoint name="RemoteFileInbound" sequence="processRemoteFile" protocol="file" suspend="false"
+                 xmlns="http://ws.apache.org/ns/synapse">
+    <parameters>
+        <parameter name="transport.vfs.FileURI">ftp://user:pass@host/in</parameter>
+    </parameters>
+</inboundEndpoint>

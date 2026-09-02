@@ -156,6 +156,50 @@ public class DependencyGraphTest {
     }
 
     @Test
+    public void inboundEndpointDependsOnSequenceAndOnError() {
+        DependencyGraph graph = build(GRAPH.resolve("inbound-endpoint"));
+        assertEquals(ids(graph.nodes().keySet()),
+                Set.of("INBOUND_ENDPOINT:HttpInbound", "SEQUENCE:foo", "SEQUENCE:fault"));
+        assertEquals(ids(graph.nodes().get(nodeById(graph, "INBOUND_ENDPOINT:HttpInbound"))),
+                Set.of("SEQUENCE:foo", "SEQUENCE:fault"));
+
+        // Leaf-first: both referenced sequences are converted before the inbound endpoint itself.
+        List<String> sorted = sortedIds(graph);
+        assertEquals(sorted.size(), 3);
+        assertEquals(sorted.get(2), "INBOUND_ENDPOINT:HttpInbound");
+        assertTrue(graph.cycles().isEmpty());
+        assertTrue(graph.unresolvedNodes().isEmpty());
+    }
+
+    @Test
+    public void inboundEndpointFallsBackToFaultSequence() {
+        DependencyGraph graph = build(GRAPH.resolve("inbound-endpoint-implicit-fault"));
+        assertEquals(ids(graph.nodes().keySet()),
+                Set.of("INBOUND_ENDPOINT:NoErrorInbound", "SEQUENCE:foo", "SEQUENCE:fault"));
+        assertEquals(ids(graph.nodes().get(nodeById(graph, "INBOUND_ENDPOINT:NoErrorInbound"))),
+                Set.of("SEQUENCE:foo", "SEQUENCE:fault"));
+
+        // Leaf-first: "fault" is converted before the inbound endpoint even though nothing references
+        // it by key — it's an implicit dependency, the same way a <resource> with no faultSequence of
+        // its own implicitly depends on the project's "fault" sequence.
+        List<String> sorted = sortedIds(graph);
+        assertEquals(sorted.size(), 3);
+        assertEquals(sorted.get(2), "INBOUND_ENDPOINT:NoErrorInbound");
+        assertTrue(graph.cycles().isEmpty());
+        assertTrue(graph.unresolvedNodes().isEmpty());
+    }
+
+    @Test
+    public void inboundEndpointIgnoresMissingFaultSequence() {
+        DependencyGraph graph = build(GRAPH.resolve("inbound-endpoint-no-fault-sequence"));
+        assertEquals(ids(graph.nodes().keySet()), Set.of("INBOUND_ENDPOINT:NoErrorInbound", "SEQUENCE:foo"));
+        assertEquals(ids(graph.nodes().get(nodeById(graph, "INBOUND_ENDPOINT:NoErrorInbound"))),
+                Set.of("SEQUENCE:foo"));
+        assertTrue(graph.cycles().isEmpty());
+        assertTrue(graph.unresolvedNodes().isEmpty());
+    }
+
+    @Test
     public void proxyOnlyProjectHasNoArtifacts() {
         DependencyGraph graph = build(GRAPH.resolve("proxy-only"));
         assertTrue(graph.nodes().isEmpty());

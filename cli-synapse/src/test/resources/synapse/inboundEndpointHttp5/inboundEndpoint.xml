@@ -1,0 +1,10 @@
+<inboundEndpoint xmlns="http://ws.apache.org/ns/synapse"
+                 name="HttpInboundEP"
+                 protocol="http"
+                 sequence="HttpInboundSeq"
+                 onError="HttpInboundFaultSeq"
+                 suspend="false">
+    <parameters>
+        <parameter name="inbound.http.port">8085</parameter>
+    </parameters>
+</inboundEndpoint>

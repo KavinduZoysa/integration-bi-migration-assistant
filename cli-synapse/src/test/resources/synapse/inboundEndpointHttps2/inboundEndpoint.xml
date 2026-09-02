@@ -1,0 +1,27 @@
+<inboundEndpoint xmlns="http://ws.apache.org/ns/synapse"
+                 name="SecureInboundEndpoint"
+                 sequence="FileProcessSequence"
+                 onError="fault"
+                 protocol="https"
+                 suspend="false">
+    <parameters>
+        <parameter name="inbound.http.port">8343</parameter>
+        <parameter name="keystore">
+            <KeyStore>
+                <Location>repository/resources/security/wso2carbon.jks</Location>
+                <Type>JKS</Type>
+                <Password>wso2carbon</Password>
+                <KeyPassword>wso2carbon</KeyPassword>
+            </KeyStore>
+        </parameter>
+        <parameter name="truststore">
+            <TrustStore>
+                <Location>repository/resources/security/client-truststore.jks</Location>
+                <Type>JKS</Type>
+                <Password>wso2carbon</Password>
+            </TrustStore>
+        </parameter>
+        <parameter name="sequential">true</parameter>
+        <parameter name="coordination">true</parameter>
+    </parameters>
+</inboundEndpoint>

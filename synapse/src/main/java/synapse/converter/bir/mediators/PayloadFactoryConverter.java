@@ -22,10 +22,18 @@ import common.BallerinaModel.Expression.BallerinaExpression;
 import common.BallerinaModel.Expression.StringConstant;
 import common.BallerinaModel.Expression.XMLTemplate;
 import common.BallerinaModel.Statement;
+import synapse.converter.ConversionContext.UnsupportedEntry;
 import synapse.converter.ScopeContext;
 import synapse.converter.bir.BIRConverter;
 import synapse.model.Synapse.PayloadFactory;
 import synapse.model.Synapse.SynapseNode;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Converts a Synapse {@code <payloadFactory>} mediator into an assignment of the built payload onto
@@ -34,22 +42,120 @@ import synapse.model.Synapse.SynapseNode;
  */
 public class PayloadFactoryConverter implements BIRConverter<ScopeContext> {
 
+    // Matches a JSON string value that is exactly a Synapse '${properties.<scope>.<name>}' template
+    // placeholder, e.g. "${properties.synapse.ERROR_MESSAGE}", quotes included.
+    private static final Pattern WHOLE_VALUE_PLACEHOLDER_PATTERN =
+            Pattern.compile("\"\\$\\{properties\\.(?:synapse|default)\\.([A-Za-z_][A-Za-z0-9_]*)\\}\"");
+
+    // Matches a JSON string literal that contains a '${properties.<scope>.<name>}' placeholder embedded
+    // alongside other text, capturing the string's body so it can be rewritten as a Ballerina string
+    // template.
+    private static final Pattern EMBEDDED_PLACEHOLDER_STRING_PATTERN = Pattern.compile(
+            "\"((?:[^\"\\\\]|\\\\.)*\\$\\{properties\\.(?:synapse|default)\\.[A-Za-z_][A-Za-z0-9_]*\\}"
+                    + "(?:[^\"\\\\]|\\\\.)*)\"");
+
+    private static final Pattern PLACEHOLDER_PATTERN =
+            Pattern.compile("\\$\\{properties\\.(?:synapse|default)\\.([A-Za-z_][A-Za-z0-9_]*)\\}");
+
     @Override
     public void convert(SynapseNode node, ScopeContext context) {
         PayloadFactory payloadFactory = (PayloadFactory) node;
-        Expression value = extractValue(payloadFactory.mediaType(), payloadFactory.format());
+        List<String> unresolvedProperties = new ArrayList<>();
+        Expression value = extractValue(payloadFactory.mediaType(), payloadFactory.format(), context,
+                unresolvedProperties);
         context.ensureContextAvailable();
+        if (!unresolvedProperties.isEmpty()) {
+            reportUnresolvedPropertyTemplates(payloadFactory, unresolvedProperties, context);
+        }
         context.statements().add(new Statement.VarAssignStatement(
                 new Expression.FieldAccess(new Expression.VariableReference("ctx"), "payload"), value));
     }
 
-    private static Expression extractValue(String mediaType, String format) {
+    private static Expression extractValue(String mediaType, String format, ScopeContext context,
+                                           List<String> unresolvedProperties) {
         return switch (mediaType) {
             case "text" -> new StringConstant(format);
             case "xml" -> new XMLTemplate(format);
             // json (and others): the <format> is already a valid Ballerina literal
-            // expression.
-            default -> new BallerinaExpression(format);
+            // expression, aside from any '${properties...}' placeholders that still need resolving.
+            default -> new BallerinaExpression(resolvePropertyTemplates(format, context, unresolvedProperties));
         };
+    }
+
+    // Resolves every '${properties.<scope>.<name>}' placeholder against the known default-scope
+    // properties, in two passes.
+    private static String resolvePropertyTemplates(String format, ScopeContext context,
+                                                    List<String> unresolvedProperties) {
+        Set<String> availableProperties = context.shared().availableDefaultScopeProperties();
+        String wholeValuesResolved =
+                substituteWholeValuePlaceholders(format, availableProperties, unresolvedProperties);
+        return substituteEmbeddedPlaceholders(wholeValuesResolved, availableProperties, unresolvedProperties);
+    }
+
+    private static String substituteWholeValuePlaceholders(String format, Set<String> availableProperties,
+                                                            List<String> unresolvedProperties) {
+        Matcher matcher = WHOLE_VALUE_PLACEHOLDER_PATTERN.matcher(format);
+        StringBuilder result = new StringBuilder();
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            String replacement;
+            if (availableProperties.contains(name)) {
+                replacement = "ctx.variables." + name;
+            } else {
+                replacement = matcher.group();
+                unresolvedProperties.add(name);
+            }
+            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(result);
+        return result.toString();
+    }
+
+    // Reached only for a quoted string that WHOLE_VALUE_PLACEHOLDER_PATTERN did not already consume.
+    private static String substituteEmbeddedPlaceholders(String format, Set<String> availableProperties,
+                                                          List<String> unresolvedProperties) {
+        Matcher stringMatcher = EMBEDDED_PLACEHOLDER_STRING_PATTERN.matcher(format);
+        StringBuilder result = new StringBuilder();
+        while (stringMatcher.find()) {
+            List<String> unresolvedInString = new ArrayList<>();
+            String rewrittenBody = substitutePlaceholdersInBody(stringMatcher.group(1), availableProperties,
+                    unresolvedInString);
+            String replacement = unresolvedInString.isEmpty()
+                    ? "`" + rewrittenBody + "`"
+                    : stringMatcher.group();
+            unresolvedProperties.addAll(unresolvedInString);
+            stringMatcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
+        }
+        stringMatcher.appendTail(result);
+        return result.toString();
+    }
+
+    private static String substitutePlaceholdersInBody(String body, Set<String> availableProperties,
+                                                        List<String> unresolvedInString) {
+        Matcher matcher = PLACEHOLDER_PATTERN.matcher(body);
+        StringBuilder result = new StringBuilder();
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            String replacement = availableProperties.contains(name)
+                    ? "${ctx.variables." + name + "}"
+                    : matcher.group();
+            if (!availableProperties.contains(name)) {
+                unresolvedInString.add(name);
+            }
+            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(result);
+        return result.toString();
+    }
+
+    private static void reportUnresolvedPropertyTemplates(PayloadFactory payloadFactory,
+                                                           List<String> unresolvedProperties, ScopeContext context) {
+        String names = unresolvedProperties.stream().distinct().collect(Collectors.joining(", "));
+        String detail = "This payloadFactory format references '${properties...}' placeholder(s) for "
+                + names + ", not among the known default-scope properties; the literal template text is left "
+                + "in the generated payload. Manual conversion required.";
+        context.statements().add(new Statement.Comment("TODO: " + detail));
+        context.shared().reportUnsupported(new UnsupportedEntry("Unsupported payloadFactory property template",
+                "payloadFactory", context.shared().currentFile(), detail, payloadFactory.format()));
     }
 }

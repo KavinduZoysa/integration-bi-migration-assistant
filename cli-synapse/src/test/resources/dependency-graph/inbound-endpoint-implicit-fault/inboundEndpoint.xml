@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inboundEndpoint name="NoErrorInbound" sequence="foo" protocol="http" suspend="false"
+                 xmlns="http://ws.apache.org/ns/synapse"/>

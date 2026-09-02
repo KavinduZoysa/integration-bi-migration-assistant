@@ -25,6 +25,7 @@ import common.BallerinaModel.Import;
 import common.BallerinaModel.Listener;
 import common.BallerinaModel.Listener.HTTPListener;
 import common.BallerinaModel.ModuleTypeDef;
+import common.BallerinaModel.ModuleVar;
 import common.BallerinaModel.Parameter;
 import common.BallerinaModel.Service;
 import common.BallerinaModel.Statement;
@@ -41,6 +42,7 @@ import synapse.converter.ConversionContext.PropertyInfo;
 import synapse.converter.ConversionContext.UnsupportedEntry;
 import synapse.converter.bir.APIConverter;
 import synapse.converter.bir.BIRConverter;
+import synapse.converter.bir.InboundEndpointConverter;
 import synapse.converter.bir.SequenceConverter;
 import synapse.converter.bir.mediators.classmediator.source.CfrDecompiler;
 import synapse.converter.bir.mediators.classmediator.source.Decompiler;
@@ -85,9 +87,9 @@ public final class SynapseConverter {
 
     private static final Map<Kind, BIRConverter<ConversionContext>> ROOT_CONVERTERS = Map.of(
             Kind.API, new APIConverter(),
-            Kind.SEQUENCE, new SequenceConverter());
+            Kind.SEQUENCE, new SequenceConverter(),
+            Kind.INBOUND_ENDPOINT, new InboundEndpointConverter());
 
-    private static final String LISTENER_NAME = "httpListener";
     private static final String DEFAULT_PORT = "8080";
     private static final String DEFAULT_HOST = "0.0.0.0";
     private static final String DEFAULT_ORG = "wso2";
@@ -221,12 +223,9 @@ public final class SynapseConverter {
             context.classMediatorStubs().forEach(context::addFunction);
             addRespondFunction(context);
             addEmitPayloadFunction(context);
-            if (dependencyGraph.sortedNodes().isEmpty() || !context.records().isEmpty()) {
-                // Emit the base package skeleton when there were no convertible artifacts (e.g. a
-                // <proxy>), and flush the Context record to types.bal once every artifact's default
-                // properties have been collected.
-                writeArtifacts(targetDir, context, writtenImports);
-            }
+            // Flush the Context record to types.bal now that every artifact's default properties have
+            // been collected.
+            writeArtifacts(targetDir, context, writtenImports);
             writeReport(targetDir, context);
         } catch (IOException e) {
             throw new RuntimeException("Error while writing the Ballerina package: ", e);
@@ -419,47 +418,87 @@ public final class SynapseConverter {
 
     private static void writeArtifacts(Path targetDir, ConversionContext context,
                                        Map<Path, Set<Import>> writtenImports) throws IOException {
-        context.addImports(ConversionContext.MAIN_BAL_FILE, List.of(new Import("ballerina", "http")));
-        writeToFile(targetDir.resolve(ConversionContext.MAIN_BAL_FILE),
-                context.importsFor(ConversionContext.MAIN_BAL_FILE),
-                List.of(new HTTPListener(LISTENER_NAME, DEFAULT_PORT, DEFAULT_HOST)),
-                context.services(), List.of(), List.of(), writtenImports);
+        Path mainBalFile = targetDir.resolve(ConversionContext.MAIN_BAL_FILE);
+        List<Listener> listeners = new ArrayList<>();
+        // The shared HTTP listener every <api> service binds to is declared once, the first round that
+        // actually converts an <api>; an <inboundEndpoint>'s own dedicated listener (context.listeners())
+        // is per-artifact output instead, so it is appended on whichever round actually introduces it.
+        if (!context.isSharedListenerDeclared() && usesSharedListener(context.services())) {
+            listeners.add(new HTTPListener(APIConverter.DEFAULT_LISTENER_REF, DEFAULT_PORT, DEFAULT_HOST));
+            context.setSharedListenerDeclared(true);
+        }
+        listeners.addAll(context.listeners());
+        // main.bal only needs ballerina/http when it actually declares an HTTP listener: a jms/file-only
+        // inbound endpoint's main.bal never references an http: type, so an unconditional import here
+        // would be an unused-import compile error.
+        if (listeners.stream().anyMatch(listener -> listener.type() == Listener.ListenerType.HTTP)) {
+            context.addImports(ConversionContext.MAIN_BAL_FILE, List.of(new Import("ballerina", "http")));
+        }
+        writeToFile(mainBalFile, context.importsFor(ConversionContext.MAIN_BAL_FILE),
+                context.moduleVars(), listeners, context.services(), List.of(), List.of(), writtenImports);
         if (!context.functions().isEmpty()) {
             writeToFile(targetDir.resolve(ConversionContext.FUNCTIONS_BAL_FILE),
                     context.importsFor(ConversionContext.FUNCTIONS_BAL_FILE), List.of(),
-                    List.of(), context.functions(), List.of(), writtenImports);
+                    List.of(), List.of(), context.functions(), List.of(), writtenImports);
         }
         if (!context.records().isEmpty()) {
             writeToFile(targetDir.resolve(ConversionContext.TYPES_BAL_FILE),
                     context.importsFor(ConversionContext.TYPES_BAL_FILE), List.of(),
-                    List.of(), List.of(), context.records(), writtenImports);
+                    List.of(), List.of(), List.of(), context.records(), writtenImports);
         }
     }
 
-    private static void writeToFile(Path file, Set<Import> imports, List<Listener> listeners,
-                                    List<Service> services, List<Function> functions,
+    // Whether this round's services include one bound to the shared listener, as opposed to only
+    // <inboundEndpoint> services, which bind to their own dedicated listener instead.
+    private static boolean usesSharedListener(List<Service> services) {
+        return services.stream()
+                .anyMatch(service -> service.listenerRefs().contains(APIConverter.DEFAULT_LISTENER_REF));
+    }
+
+    private static void writeToFile(Path file, Set<Import> imports, List<ModuleVar> moduleVars,
+                                    List<Listener> listeners, List<Service> services, List<Function> functions,
                                     List<ModuleTypeDef> records,
                                     Map<Path, Set<Import>> writtenImports) throws IOException {
-        appendConstructs(file, listeners, services, functions, records);
+        appendConstructs(file, moduleVars, listeners, services, functions, records);
         prependNewImports(file, imports, writtenImports);
     }
 
-    private static void appendConstructs(Path file, List<Listener> listeners, List<Service> services,
-                                         List<Function> functions, List<ModuleTypeDef> records)
+    private static void appendConstructs(Path file, List<ModuleVar> moduleVars, List<Listener> listeners,
+                                         List<Service> services, List<Function> functions,
+                                         List<ModuleTypeDef> records)
             throws IOException {
         boolean exists = Files.exists(file);
-        if (exists && services.isEmpty() && functions.isEmpty() && records.isEmpty()) {
+        if (moduleVars.isEmpty() && listeners.isEmpty() && services.isEmpty() && functions.isEmpty()
+                && records.isEmpty()) {
             return;
         }
         TextDocument document = new TextDocument(file.getFileName().toString(),
-                List.of(), records, List.of(), exists ? List.of() : listeners,
+                List.of(), records, moduleVars, listeners,
                 services, functions, List.of(), List.of(), List.of());
-        String source = document.toSource();
+        String source = blankLineAfterConfigurableBlock(document.toSource());
         if (exists) {
             Files.writeString(file, System.lineSeparator() + source, StandardOpenOption.APPEND);
         } else {
             Files.writeString(file, source);
         }
+    }
+
+    private static String blankLineAfterConfigurableBlock(String source) {
+        String[] lines = source.split("\n", -1);
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < lines.length; i++) {
+            result.append(lines[i]);
+            boolean isLastLine = i == lines.length - 1;
+            if (!isLastLine) {
+                result.append("\n");
+            }
+            boolean endsConfigurableBlock = lines[i].strip().startsWith("configurable ") && !isLastLine
+                    && !lines[i + 1].isBlank() && !lines[i + 1].strip().startsWith("configurable ");
+            if (endsConfigurableBlock) {
+                result.append("\n");
+            }
+        }
+        return result.toString();
     }
 
     private static void prependNewImports(Path file, Set<Import> imports,
@@ -476,7 +515,13 @@ public final class SynapseConverter {
         String importSource = new TextDocument(file.getFileName().toString(), new ArrayList<>(newImports),
                 List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of())
                 .toSource();
-        Files.writeString(file, importSource + Files.readString(file));
+        String existingContent = Files.readString(file);
+        // A prior round may have already prepended its own imports; merge directly above them instead of
+        // stacking another blank-line-separated import block on top of one that's already there.
+        if (existingContent.startsWith("import ")) {
+            importSource = importSource.stripTrailing() + System.lineSeparator();
+        }
+        Files.writeString(file, importSource + existingContent);
         written.addAll(newImports);
     }
 

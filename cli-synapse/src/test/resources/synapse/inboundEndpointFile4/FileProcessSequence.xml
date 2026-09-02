@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence xmlns="http://ws.apache.org/ns/synapse" name="FileProcessSequence">
+    <log category="INFO" logFullPayload="true">
+        <message>File received and processing complete</message>
+    </log>
+    <drop/>
+</sequence>

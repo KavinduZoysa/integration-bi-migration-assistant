@@ -26,6 +26,9 @@ import synapse.model.Synapse.ClassMediator;
 import synapse.model.Synapse.FaultSequence;
 import synapse.model.Synapse.FaultSequenceRef;
 import synapse.model.Synapse.InSequence;
+import synapse.model.Synapse.InboundEndpoint;
+import synapse.model.Synapse.KeyStoreConfig;
+import synapse.model.Synapse.Param;
 import synapse.model.Synapse.PayloadFactory;
 import synapse.model.Synapse.Property;
 import synapse.model.Synapse.Resource;
@@ -40,6 +43,7 @@ import synapse.model.SynapseType;
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import javax.xml.XMLConstants;
@@ -63,6 +67,16 @@ public class SynapseModelGenerator {
     private static final String PROPERTY_TAG = "property";
     private static final String FORMAT_TAG = "format";
     private static final String CLASS_TAG = "class";
+    private static final String INBOUND_ENDPOINT_TAG = "inboundEndpoint";
+    private static final String PARAMETERS_TAG = "parameters";
+    private static final String PARAMETER_TAG = "parameter";
+    private static final String KEYSTORE_PARAM_NAME = "keystore";
+    private static final String KEY_STORE_TAG = "KeyStore";
+    private static final String KEY_STORE_LOCATION_TAG = "Location";
+    private static final String KEY_STORE_TYPE_TAG = "Type";
+    private static final String KEY_STORE_PASSWORD_TAG = "Password";
+    private static final String KEY_STORE_KEY_PASSWORD_TAG = "KeyPassword";
+    private static final String HTTPS_PROTOCOL = "https";
 
     private static final String DEFAULT_PROPERTY_SCOPE = "default";
     private static final String DEFAULT_PROPERTY_ACTION = "set";
@@ -100,9 +114,73 @@ public class SynapseModelGenerator {
         return switch (element.getTagName()) {
             case API_TAG -> readApi(element);
             case SEQUENCE_TAG -> readSequence(element);
+            case INBOUND_ENDPOINT_TAG -> readInboundEndpoint(element);
             default -> new UnsupportedArtifact(element.getTagName(), element.getAttribute("name"),
                     serializeElement(element));
         };
+    }
+
+    @NotNull
+    private static InboundEndpoint readInboundEndpoint(Element element) {
+        assert element != null : "element must not be null";
+        String name = element.getAttribute("name");
+        if (name.isBlank()) {
+            throw new IllegalArgumentException("Synapse inboundEndpoint must define a non-empty 'name'.");
+        }
+        String onErrorKey = element.getAttribute("onError");
+        boolean isHttpsProtocol = HTTPS_PROTOCOL.equalsIgnoreCase(element.getAttribute("protocol"));
+
+        List<Param> parameters = new ArrayList<>();
+        Optional<KeyStoreConfig> keyStore = Optional.empty();
+        for (Element child : childElements(element)) {
+            if (PARAMETERS_TAG.equals(child.getTagName())) {
+                for (Element parameter : childElements(child)) {
+                    if (!PARAMETER_TAG.equals(parameter.getTagName())) {
+                        continue;
+                    }
+                    // An https keystore parameter nests a <KeyStore> element; read as a plain Param,
+                    // getTextContent() would flatten it into a whitespace blob. Gated to https only so a
+                    // keystore on any other protocol still reaches reportUnsupportedParameter as before.
+                    if (isHttpsProtocol && KEYSTORE_PARAM_NAME.equals(parameter.getAttribute("name"))) {
+                        keyStore = readKeyStoreConfig(parameter);
+                    } else {
+                        parameters.add(new Param(parameter.getAttribute("name"), parameter.getTextContent().trim()));
+                    }
+                }
+            }
+        }
+
+        return new InboundEndpoint(name, element.getAttribute("protocol"), element.getAttribute("class"),
+                element.getAttribute("sequence"),
+                onErrorKey.isBlank() ? new FaultSequenceRef.None() : new FaultSequenceRef.KeyRef(onErrorKey),
+                parameters, keyStore, Boolean.parseBoolean(element.getAttribute("suspend")),
+                serializeElement(element));
+    }
+
+    // Reads <parameter name="keystore"><KeyStore><Location/><Type/><Password/><KeyPassword/></KeyStore>
+    // </parameter>; each KeyStore child is a leaf, so getTextContent() is safe on them.
+    @NotNull
+    private static Optional<KeyStoreConfig> readKeyStoreConfig(Element keystoreParameter) {
+        for (Element keyStoreElement : childElements(keystoreParameter)) {
+            if (!KEY_STORE_TAG.equals(keyStoreElement.getTagName())) {
+                continue;
+            }
+            String location = "";
+            String type = "";
+            String password = "";
+            Optional<String> keyPassword = Optional.empty();
+            for (Element field : childElements(keyStoreElement)) {
+                switch (field.getTagName()) {
+                    case KEY_STORE_LOCATION_TAG -> location = field.getTextContent().trim();
+                    case KEY_STORE_TYPE_TAG -> type = field.getTextContent().trim();
+                    case KEY_STORE_PASSWORD_TAG -> password = field.getTextContent().trim();
+                    case KEY_STORE_KEY_PASSWORD_TAG -> keyPassword = Optional.of(field.getTextContent().trim());
+                    default -> { }
+                }
+            }
+            return Optional.of(new KeyStoreConfig(location, type, password, keyPassword));
+        }
+        return Optional.empty();
     }
 
     private static Api readApi(Element element) {

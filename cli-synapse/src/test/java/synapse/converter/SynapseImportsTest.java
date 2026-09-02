@@ -25,14 +25,16 @@ import java.nio.file.Path;
 import java.util.Optional;
 
 import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 
 /**
  * Tests that the per-artifact import handling writes correct {@code import} statements into the
- * generated files: {@code main.bal} always imports {@code ballerina/http} for the listener, and
- * {@code functions.bal} always imports it for the generated {@code respond} utility (which references
- * {@code http:Response} and {@code http:Caller}). The import is kept at the top of the file and
- * deduplicated even when introduced by a later-flushed artifact.
+ * generated files: {@code main.bal} imports {@code ballerina/http} for the listener whenever a listener
+ * is actually needed (and is omitted entirely otherwise), and {@code functions.bal} always imports it for
+ * the generated {@code respond} utility (which references {@code http:Response} and {@code http:Caller}).
+ * The import is kept at the top of the file and deduplicated even when introduced by a later-flushed
+ * artifact.
  */
 public class SynapseImportsTest {
 
@@ -55,11 +57,11 @@ public class SynapseImportsTest {
     }
 
     @Test
-    public void mainAlwaysImportsHttpAtTheTop() throws IOException {
+    public void mainOmittedWhenNoListenerIsNeeded() throws IOException {
         Path output = convert("no-http-import");
         try {
-            String main = Files.readString(output.resolve("main.bal"));
-            assertTrue(main.stripLeading().startsWith(HTTP_IMPORT), "main.bal must import http at the top");
+            assertFalse(Files.exists(output.resolve("main.bal")),
+                    "main.bal must not be written when nothing converted needs a listener");
         } finally {
             TestUtils.deleteDirectory(output);
         }
@@ -107,12 +109,12 @@ public class SynapseImportsTest {
     }
 
     @Test
-    public void proxyOnlyProjectWritesListenerSkeletonWithHttp() throws IOException {
+    public void proxyOnlyProjectWritesNoListenerSkeleton() throws IOException {
         Path output = convert("listener-only");
         try {
-            String main = Files.readString(output.resolve("main.bal"));
-            assertTrue(main.stripLeading().startsWith(HTTP_IMPORT));
-            assertTrue(main.contains("listener http:Listener httpListener"));
+            assertFalse(Files.exists(output.resolve("main.bal")),
+                    "an unsupported <proxy>-only project produces no service or listener, so main.bal "
+                            + "must not be written");
             String functions = Files.readString(output.resolve("functions.bal"));
             assertTrue(functions.contains("function respond(Context ctx)"),
                     "the respond utility is always generated, even for a proxy-only project");

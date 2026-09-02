@@ -25,6 +25,7 @@ import common.BallerinaModel.Parameter;
 import common.BallerinaModel.Statement;
 import common.BallerinaModel.TypeDesc;
 import common.BallerinaModel.TypeDesc.BuiltinType;
+import common.ConversionUtils;
 import synapse.converter.ScopeContext;
 import synapse.converter.bir.BIRConverter;
 import synapse.converter.bir.mediators.PropertyConverter;
@@ -83,8 +84,7 @@ public class ClassMediatorConverter implements BIRConverter<ScopeContext> {
 
     /** Converts {@code org.example.MyMediator} to {@code myMediator}. */
     private static String stubFunctionName(String className) {
-        String simpleName = simpleName(className);
-        return Character.toLowerCase(simpleName.charAt(0)) + simpleName.substring(1);
+        return ConversionUtils.lowerFirst(simpleName(className));
     }
 
     // Shared with MediateMethodPropertyScanner to match a class name against its Java declaration.

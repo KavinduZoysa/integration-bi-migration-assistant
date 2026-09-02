@@ -1,6 +1,5 @@
-import ballerina/log;
-
 import ballerina/http;
+import ballerina/log;
 
 public listener http:Listener httpListener = new (8080);
 

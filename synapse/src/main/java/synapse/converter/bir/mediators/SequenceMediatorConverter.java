@@ -70,6 +70,8 @@ public class SequenceMediatorConverter implements BIRConverter<ScopeContext> {
         context.statements().add(new Statement.Comment(
                 "TODO: Unresolved Synapse sequence reference '" + key + "'" + origin + ". " + detail
                         + "\nOriginal Synapse:\n" + snippet));
+        context.statements().add(new Statement.BallerinaStatement(
+                "fail error(\"Unresolved sequence reference: '" + key + "'\");"));
         context.shared().reportUnsupported(
                 new UnsupportedEntry("Unresolved sequence", "sequence", file, detail, snippet));
     }

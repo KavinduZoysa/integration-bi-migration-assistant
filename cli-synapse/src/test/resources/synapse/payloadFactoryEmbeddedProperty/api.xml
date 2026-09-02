@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api context="/PayloadFactoryEmbeddedProperty" name="PayloadFactoryEmbeddedProperty"
+     xmlns="http://ws.apache.org/ns/synapse">
+    <resource methods="GET" uri-template="/status">
+        <inSequence>
+            <payloadFactory media-type="json">
+                <format>{"Hello":"World"}</format>
+            </payloadFactory>
+            <respond/>
+        </inSequence>
+        <faultSequence>
+            <payloadFactory media-type="json">
+                <format>{"error": "Request failed: ${properties.synapse.ERROR_MESSAGE} - please retry"}</format>
+            </payloadFactory>
+            <respond/>
+        </faultSequence>
+    </resource>
+    <resource methods="GET" uri-template="/unknown">
+        <inSequence>
+            <payloadFactory media-type="json">
+                <format>{"note": "Value: ${properties.default.NOT_A_REAL_PROP} end"}</format>
+            </payloadFactory>
+            <respond/>
+        </inSequence>
+    </resource>
+</api>
