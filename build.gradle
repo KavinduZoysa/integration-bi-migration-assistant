@@ -43,6 +43,7 @@ build {
     dependsOn "mule:build"
     dependsOn "tibco:build"
     dependsOn "synapse:build"
+    dependsOn "raml-to-openapi:build"
     dependsOn "cli-mule:build"
     dependsOn "cli-tibco:build"
     dependsOn "cli-synapse:build"
