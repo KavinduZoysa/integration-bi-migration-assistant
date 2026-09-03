@@ -39,6 +39,7 @@ public enum DWConstruct implements DWConstructBase {
     CONDITIONAL("when", 2),
     UNLESS("unless", 2),
     FUNCTION_CALL("function-call", 3),
+    INFIX_FUNCTION_CALL("infix-function-call", 3),
     CONCAT("concat", 2),
     REPLACE("replace", 2),
     SIZE_OF("size-of", 2),
@@ -49,6 +50,8 @@ public enum DWConstruct implements DWConstructBase {
     UPPER("upper", 3),
     TYPE_EXPRESSION("type-expression", 3),
     GROUP_BY("group-by", 3),
+    DO_BLOCK("do-block", 3),
+    CONDITIONAL_FIELD("conditional-field", 3),
 
     // Binary operators
     MULTIPLICATIVE_OPERATOR("multiplicative-operator", 3),

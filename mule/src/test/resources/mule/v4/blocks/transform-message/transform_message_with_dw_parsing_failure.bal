@@ -1,5 +1,5 @@
 public type Vars record {|
-    null _dwOutput_?;
+    any _dwOutput_?;
 |};
 
 public type Context record {|

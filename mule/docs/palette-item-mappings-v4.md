@@ -5652,7 +5652,7 @@ payload map (item) -> {
 **Output (transform_message_with_dw_parsing_failure.bal):**
 ```ballerina
 public type Vars record {|
-    null _dwOutput_?;
+    any _dwOutput_?;
 |};
 
 public type Context record {|

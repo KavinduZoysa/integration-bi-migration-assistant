@@ -125,7 +125,8 @@ public class DWContext {
         public List<BallerinaModel.Parameter> params = new ArrayList<>();
         private final List<BallerinaModel.Statement> statements = new ArrayList<>();
         public Map<String, String> varTypes = new HashMap<>();
-        public String outputType;
+        // DataWeave defaults to application/dw when the script declares no output directive
+        public String outputType = DWUtils.findBallerinaType(DWUtils.APPLICATION_DW);
         public String dwVersion;
         public StringBuilder exprBuilder = new StringBuilder();
         public boolean containsCheck = false;
