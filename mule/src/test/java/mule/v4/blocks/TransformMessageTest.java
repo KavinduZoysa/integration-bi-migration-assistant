@@ -103,7 +103,6 @@ public class TransformMessageTest extends AbstractBlockTest {
                 {"transform_message_with_multiple_imports.dwl", "transform_message_with_multiple_imports.bal"},
 
                 // contains complex dw examples
-                // skip from docs with -sd flag
                 {"dw_string_concat_and_lowercase-sd.dwl", "dw_string_concat_and_lowercase-sd.bal"},
                 {"dw_map_over_array-sd.dwl", "dw_map_over_array-sd.bal"},
                 {"dw_map_with_default_fallback-sd.dwl", "dw_map_with_default_fallback-sd.bal"},

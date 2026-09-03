@@ -86,7 +86,10 @@ AT: '@';
 QUESTION: '?';
 
 // Parser rules
-script: header? SEPARATOR? body? NEWLINE* EOF;
+script
+    : header (SEPARATOR body?)? NEWLINE* EOF
+    | SEPARATOR? body NEWLINE* EOF
+    ;
 
 header: (directive (NEWLINE | WS)*)+;
 
