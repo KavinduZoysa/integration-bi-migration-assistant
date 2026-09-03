@@ -57,6 +57,11 @@ public class TransformMessageTest extends AbstractBlockTest {
     public Object[][] provideTestParams() {
         return new Object[][]{
                 // granular level dw test cases
+                {"transform_message_with_join_by.dwl", "transform_message_with_join_by.bal"},
+                {"transform_message_with_infix_function_call.dwl",
+                        "transform_message_with_infix_function_call.bal"},
+                {"transform_message_with_null_and_qualified_import.dwl",
+                        "transform_message_with_null_and_qualified_import.bal"},
                 {"transform_message_with_string_return.dwl", "transform_message_with_string_return.bal"},
                 {"transform_message_with_single_selector.dwl", "transform_message_with_single_selector.bal"},
                 {"transform_message_with_sizeof.dwl", "transform_message_with_sizeof.bal"},
@@ -87,13 +92,25 @@ public class TransformMessageTest extends AbstractBlockTest {
                         "transform_message_with_type_coercion_to_date.bal"},
                 {"transform_message_with_default_value.dwl", "transform_message_with_default_value.bal"},
                 {"transform_message_with_property_reading.dwl", "transform_message_with_property_reading.bal"},
+                {"transform_message_with_block_comment.dwl", "transform_message_with_block_comment.bal"},
+                {"transform_message_with_escaped_string.dwl", "transform_message_with_escaped_string.bal"},
+                {"transform_message_with_subtraction.dwl", "transform_message_with_subtraction.bal"},
+                {"transform_message_with_not_operator.dwl", "transform_message_with_not_operator.bal"},
+                {"transform_message_with_empty_object.dwl", "transform_message_with_empty_object.bal"},
+                {"transform_message_with_expression_only_script.dwl",
+                        "transform_message_with_expression_only_script.bal"},
+                {"transform_message_with_do_block.dwl", "transform_message_with_do_block.bal"},
+                {"transform_message_with_multiple_imports.dwl", "transform_message_with_multiple_imports.bal"},
 
                 // contains complex dw examples
-                // skip from docs with -sd flag
                 {"dw_string_concat_and_lowercase-sd.dwl", "dw_string_concat_and_lowercase-sd.bal"},
                 {"dw_map_over_array-sd.dwl", "dw_map_over_array-sd.bal"},
                 {"dw_map_with_default_fallback-sd.dwl", "dw_map_with_default_fallback-sd.bal"},
-                {"dw_complex_1-sd.dwl", "dw_complex_1-sd.bal"}
+                {"dw_complex_1-sd.dwl", "dw_complex_1-sd.bal"},
+                {"transform_message_with_chained_type_coercion-sd.dwl",
+                        "transform_message_with_chained_type_coercion-sd.bal"},
+                {"transform_message_with_conditional_field-sd.dwl",
+                        "transform_message_with_conditional_field-sd.bal"}
         };
     }
 }

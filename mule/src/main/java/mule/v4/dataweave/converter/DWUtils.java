@@ -41,6 +41,7 @@ public class DWUtils {
     public static final String DW_VALUE_IDENTIFIER = "$";
     public static final String DW_NOW_IDENTIFIER = "now";
     public static final String DW_PAYLOAD_IDENTIFIER = "payload";
+    public static final String DW_JOIN_BY_IDENTIFIER = "joinBy";
 
     // IO Types
     public static final String APPLICATION_JAVA = "application/java";
@@ -143,7 +144,7 @@ public class DWUtils {
                 expression.endsWith(DWUtils.CURLY_END_BRACKET)) {
             return DWUtils.OBJECT;
         }
-        throw new BallerinaDWException("Unsupported type: " + expression);
+        return DWUtils.UNKNOWN;
     }
 
     public static String getBallerinaType(String dwType, Context ctx) {

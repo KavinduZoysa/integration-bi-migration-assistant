@@ -182,6 +182,9 @@ public class DWReader {
             BallerinaVisitor visitor = new BallerinaVisitor(context, ctx, ctx.migrationMetrics.dwConversionStats,
                     namePrefix, ctx.projectCtx.counters.dwFunctionPrefixCounters);
             visitor.visit(tree);
+            if (context.functionNames.isEmpty()) {
+                return declarationOnlyScriptTodo(script, ctx);
+            }
             context.currentScriptContext.funcName = context.functionNames.getLast();
             return buildStatement(context, varName);
         }
@@ -211,6 +214,9 @@ public class DWReader {
         BallerinaVisitor visitor = new BallerinaVisitor(context, ctx, ctx.migrationMetrics.dwConversionStats,
                 namePrefix, ctx.projectCtx.counters.dwFunctionPrefixCounters);
         visitor.visit(tree);
+        if (context.functionNames.isEmpty()) {
+            return declarationOnlyScriptTodo(fileScript, ctx);
+        }
         context.currentScriptContext.funcName = context.functionNames.getLast();
         context.scriptCache.put(resourcePath, context.currentScriptContext);
         return buildStatement(context, varName);
@@ -267,6 +273,13 @@ public class DWReader {
         } catch (IOException e) {
             throw new DWCodeGenException(filePath, e);
         }
+    }
+
+    @NotNull
+    private static String declarationOnlyScriptTodo(String script, Context ctx) {
+        ctx.migrationMetrics.dwConversionStats.record(DWConstruct.UNSUPPORTED, false);
+        return ConversionUtils.wrapElementInTodoComment(script,
+                "DATAWEAVE SCRIPT DECLARES NO TRANSFORMATION BODY.");
     }
 
     private static String buildStatement(DWContext context, String varName) {

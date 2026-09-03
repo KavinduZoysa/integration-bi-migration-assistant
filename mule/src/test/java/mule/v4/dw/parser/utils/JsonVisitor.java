@@ -93,8 +93,14 @@ public class JsonVisitor extends DataWeaveBaseVisitor<JsonNode> {
     public JsonNode visitImportDirective(DataWeaveParser.ImportDirectiveContext ctx) {
         ObjectNode directiveNode = objectMapper.createObjectNode();
         directiveNode.put("type", "Import");
-        directiveNode.put("identifier", ctx.IDENTIFIER().getText());
-        if (ctx.STRING() != null) {
+        ArrayNode importedNames = objectMapper.createArrayNode();
+        for (DataWeaveParser.ImportSpecContext importSpec : ctx.importSpec()) {
+            importedNames.add(importSpec.getText());
+        }
+        directiveNode.set("identifier", importedNames);
+        if (ctx.qualifiedIdentifier() != null) {
+            directiveNode.put("from", ctx.qualifiedIdentifier().getText());
+        } else if (ctx.STRING() != null) {
             directiveNode.put("from", ctx.STRING().getText());
         }
         return directiveNode;
@@ -142,8 +148,8 @@ public class JsonVisitor extends DataWeaveBaseVisitor<JsonNode> {
     @Override
     public JsonNode visitFunctionParameters(DataWeaveParser.FunctionParametersContext ctx) {
         ArrayNode argsArray = objectMapper.createArrayNode();
-        for (var identifier : ctx.IDENTIFIER()) {
-            argsArray.add(identifier.getText());
+        for (DataWeaveParser.FunctionParameterContext parameter : ctx.functionParameter()) {
+            argsArray.add(parameter.IDENTIFIER().getText());
         }
         return argsArray;
     }
@@ -162,7 +168,7 @@ public class JsonVisitor extends DataWeaveBaseVisitor<JsonNode> {
         ObjectNode objectNode = objectMapper.createObjectNode();
         objectNode.put("type", "IfElseCondition");
 
-        List<DataWeaveParser.LogicalOrExpressionContext> expressions = ctx.logicalOrExpression();
+        List<DataWeaveParser.ExpressionContext> expressions = ctx.expression();
         ArrayNode ifClauses = objectMapper.createArrayNode();
 
         if (expressions.size() >= 2) {
@@ -345,7 +351,7 @@ public class JsonVisitor extends DataWeaveBaseVisitor<JsonNode> {
         ObjectNode objectNode = objectMapper.createObjectNode();
         objectNode.put("type", "AdditiveExpression");
         objectNode.set("left", visit(ctx.multiplicativeExpression(0)));
-        objectNode.put("operator", ctx.OPERATOR_ADDITIVE(0).getText());
+        objectNode.put("operator", ctx.additiveOperator(0).getText());
         objectNode.set("right", visit(ctx.multiplicativeExpression(1)));
         return objectNode;
     }

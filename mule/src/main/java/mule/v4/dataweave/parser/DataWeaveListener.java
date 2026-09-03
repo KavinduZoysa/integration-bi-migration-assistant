@@ -78,6 +78,16 @@ public interface DataWeaveListener extends ParseTreeListener {
 	 */
 	void exitImportDirective(DataWeaveParser.ImportDirectiveContext ctx);
 	/**
+	 * Enter a parse tree produced by {@link DataWeaveParser#importSpec}.
+	 * @param ctx the parse tree
+	 */
+	void enterImportSpec(DataWeaveParser.ImportSpecContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link DataWeaveParser#importSpec}.
+	 * @param ctx the parse tree
+	 */
+	void exitImportSpec(DataWeaveParser.ImportSpecContext ctx);
+	/**
 	 * Enter a parse tree produced by {@link DataWeaveParser#namespaceDirective}.
 	 * @param ctx the parse tree
 	 */
@@ -149,6 +159,18 @@ public interface DataWeaveListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitMapExpression(DataWeaveParser.MapExpressionContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code infixFunctionCall}
+	 * labeled alternative in {@link DataWeaveParser#operationExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterInfixFunctionCall(DataWeaveParser.InfixFunctionCallContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code infixFunctionCall}
+	 * labeled alternative in {@link DataWeaveParser#operationExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitInfixFunctionCall(DataWeaveParser.InfixFunctionCallContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code operationExpressionWrapper}
 	 * labeled alternative in {@link DataWeaveParser#operationExpression}.
@@ -250,6 +272,16 @@ public interface DataWeaveListener extends ParseTreeListener {
 	 */
 	void exitFunctionParameters(DataWeaveParser.FunctionParametersContext ctx);
 	/**
+	 * Enter a parse tree produced by {@link DataWeaveParser#functionParameter}.
+	 * @param ctx the parse tree
+	 */
+	void enterFunctionParameter(DataWeaveParser.FunctionParameterContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link DataWeaveParser#functionParameter}.
+	 * @param ctx the parse tree
+	 */
+	void exitFunctionParameter(DataWeaveParser.FunctionParameterContext ctx);
+	/**
 	 * Enter a parse tree produced by {@link DataWeaveParser#logicalOrExpression}.
 	 * @param ctx the parse tree
 	 */
@@ -313,6 +345,16 @@ public interface DataWeaveListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitAdditiveExpression(DataWeaveParser.AdditiveExpressionContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link DataWeaveParser#additiveOperator}.
+	 * @param ctx the parse tree
+	 */
+	void enterAdditiveOperator(DataWeaveParser.AdditiveOperatorContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link DataWeaveParser#additiveOperator}.
+	 * @param ctx the parse tree
+	 */
+	void exitAdditiveOperator(DataWeaveParser.AdditiveOperatorContext ctx);
 	/**
 	 * Enter a parse tree produced by {@link DataWeaveParser#multiplicativeExpression}.
 	 * @param ctx the parse tree
@@ -572,6 +614,18 @@ public interface DataWeaveListener extends ParseTreeListener {
 	 */
 	void exitBuiltInFunctionExpression(DataWeaveParser.BuiltInFunctionExpressionContext ctx);
 	/**
+	 * Enter a parse tree produced by the {@code doBlockExpression}
+	 * labeled alternative in {@link DataWeaveParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 */
+	void enterDoBlockExpression(DataWeaveParser.DoBlockExpressionContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code doBlockExpression}
+	 * labeled alternative in {@link DataWeaveParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 */
+	void exitDoBlockExpression(DataWeaveParser.DoBlockExpressionContext ctx);
+	/**
 	 * Enter a parse tree produced by the {@code functionCallExpression}
 	 * labeled alternative in {@link DataWeaveParser#primaryExpression}.
 	 * @param ctx the parse tree
@@ -629,6 +683,16 @@ public interface DataWeaveListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitGrouped(DataWeaveParser.GroupedContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link DataWeaveParser#doBlock}.
+	 * @param ctx the parse tree
+	 */
+	void enterDoBlock(DataWeaveParser.DoBlockContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link DataWeaveParser#doBlock}.
+	 * @param ctx the parse tree
+	 */
+	void exitDoBlock(DataWeaveParser.DoBlockContext ctx);
 	/**
 	 * Enter a parse tree produced by the {@code singleValueSelector}
 	 * labeled alternative in {@link DataWeaveParser#selectorExpression}.
@@ -758,6 +822,18 @@ public interface DataWeaveListener extends ParseTreeListener {
 	 */
 	void exitSingleFieldObject(DataWeaveParser.SingleFieldObjectContext ctx);
 	/**
+	 * Enter a parse tree produced by the {@code emptyObject}
+	 * labeled alternative in {@link DataWeaveParser#object}.
+	 * @param ctx the parse tree
+	 */
+	void enterEmptyObject(DataWeaveParser.EmptyObjectContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code emptyObject}
+	 * labeled alternative in {@link DataWeaveParser#object}.
+	 * @param ctx the parse tree
+	 */
+	void exitEmptyObject(DataWeaveParser.EmptyObjectContext ctx);
+	/**
 	 * Enter a parse tree produced by the {@code unquotedKeyField}
 	 * labeled alternative in {@link DataWeaveParser#objectField}.
 	 * @param ctx the parse tree
@@ -793,6 +869,18 @@ public interface DataWeaveListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitDynamicKeyField(DataWeaveParser.DynamicKeyFieldContext ctx);
+	/**
+	 * Enter a parse tree produced by the {@code conditionalField}
+	 * labeled alternative in {@link DataWeaveParser#objectField}.
+	 * @param ctx the parse tree
+	 */
+	void enterConditionalField(DataWeaveParser.ConditionalFieldContext ctx);
+	/**
+	 * Exit a parse tree produced by the {@code conditionalField}
+	 * labeled alternative in {@link DataWeaveParser#objectField}.
+	 * @param ctx the parse tree
+	 */
+	void exitConditionalField(DataWeaveParser.ConditionalFieldContext ctx);
 	/**
 	 * Enter a parse tree produced by {@link DataWeaveParser#qualifiedIdentifier}.
 	 * @param ctx the parse tree

@@ -2,23 +2,34 @@
 
 # Supported Dataweave 2.0 (Mule 4.x) Constructs
 
+- [Block Comment Expression](dataweave-mappings-v4.md#block-comment-expression)
 - [Concat Array Expression](dataweave-mappings-v4.md#concat-array-expression)
 - [Concat Object Expression](dataweave-mappings-v4.md#concat-object-expression)
 - [Concat String Expression](dataweave-mappings-v4.md#concat-string-expression)
 - [Date Type Expression](dataweave-mappings-v4.md#date-type-expression)
 - [Default Value Expression](dataweave-mappings-v4.md#default-value-expression)
+- [Do Block Expression](dataweave-mappings-v4.md#do-block-expression)
+- [Empty Object Expression](dataweave-mappings-v4.md#empty-object-expression)
+- [Escaped String Expression](dataweave-mappings-v4.md#escaped-string-expression)
+- [Expression Only Script Expression](dataweave-mappings-v4.md#expression-only-script-expression)
 - [Filter Value Identifier Expression](dataweave-mappings-v4.md#filter-value-identifier-expression)
+- [Infix Function Call Expression](dataweave-mappings-v4.md#infix-function-call-expression)
+- [Join By Expression](dataweave-mappings-v4.md#join-by-expression)
 - [Lower Expression](dataweave-mappings-v4.md#lower-expression)
 - [Map Combination Expression](dataweave-mappings-v4.md#map-combination-expression)
 - [Map Index Identifier Expression](dataweave-mappings-v4.md#map-index-identifier-expression)
 - [Map Index Identifier Only Expression](dataweave-mappings-v4.md#map-index-identifier-only-expression)
 - [Map Value Identifier Expression](dataweave-mappings-v4.md#map-value-identifier-expression)
 - [Map With Parameters Expression](dataweave-mappings-v4.md#map-with-parameters-expression)
+- [Multiple Imports Expression](dataweave-mappings-v4.md#multiple-imports-expression)
+- [Not Operator Expression](dataweave-mappings-v4.md#not-operator-expression)
+- [Null And Qualified Import Expression](dataweave-mappings-v4.md#null-and-qualified-import-expression)
 - [Property Reading Expression](dataweave-mappings-v4.md#property-reading-expression)
 - [Replace With Expression](dataweave-mappings-v4.md#replace-with-expression)
 - [Single Selector Expression](dataweave-mappings-v4.md#single-selector-expression)
 - [Sizeof Expression](dataweave-mappings-v4.md#sizeof-expression)
 - [String Return Expression](dataweave-mappings-v4.md#string-return-expression)
+- [Subtraction Expression](dataweave-mappings-v4.md#subtraction-expression)
 - [Type Coercion Date To Number Expression](dataweave-mappings-v4.md#type-coercion-date-to-number-expression)
 - [Type Coercion Format Expression](dataweave-mappings-v4.md#type-coercion-format-expression)
 - [Type Coercion Number Expression](dataweave-mappings-v4.md#type-coercion-number-expression)
@@ -30,6 +41,54 @@
 # DataWeave to Ballerina Transformations (Mule 4.x)
 
 This section provides examples of DataWeave scripts from Mule 4.x and their corresponding Ballerina implementations.
+
+## Block Comment Expression
+
+**DataWeave Script (transform_message_with_block_comment.dwl):**
+```dataweave
+%dw 2.0
+output application/json
+
+/**
+ * Builds the response object.
+ * Comments must not reach the generated code.
+ */
+var total = 10
+---
+{
+  /* the running total */
+  total: total,
+  label: "count" // trailing line comment
+}
+
+```
+
+**Ballerina Output (transform_message_with_block_comment.bal):**
+```ballerina
+public type Vars record {|
+    json _dwOutput_?;
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Vars vars = {};
+|};
+
+public function _dwMethod(Context ctx) returns json {
+    int total = 10;
+    return {
+        "total": total,
+        "label": "count"
+    };
+}
+
+public function sampleFlow(Context ctx) {
+    json _dwOutput_ = _dwMethod(ctx);
+    ctx.vars._dwOutput_ = _dwOutput_;
+    ctx.payload = _dwOutput_;
+}
+
+```
 
 ## Concat Array Expression
 
@@ -221,6 +280,148 @@ public function _dwMethod(Context ctx) returns json|error => let json payload = 
 
 ```
 
+## Do Block Expression
+
+**DataWeave Script (transform_message_with_do_block.dwl):**
+```dataweave
+%dw 2.0
+output application/json
+---
+do {
+  var greeting = "hello"
+  var target = "world"
+  ---
+  { message: greeting ++ " " ++ target }
+}
+
+```
+
+**Ballerina Output (transform_message_with_do_block.bal):**
+```ballerina
+public type Vars record {|
+    json _dwOutput_?;
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Vars vars = {};
+|};
+
+public function _dwMethod(Context ctx) returns json => let string greeting = "hello", string target = "world" in {"message": greeting.toString() + " " + target};
+
+public function sampleFlow(Context ctx) {
+    json _dwOutput_ = _dwMethod(ctx);
+    ctx.vars._dwOutput_ = _dwOutput_;
+    ctx.payload = _dwOutput_;
+}
+
+```
+
+## Empty Object Expression
+
+**DataWeave Script (transform_message_with_empty_object.dwl):**
+```dataweave
+%dw 2.0
+output application/json
+---
+{
+  attributes: {},
+  fallback: payload.details default {}
+}
+
+```
+
+**Ballerina Output (transform_message_with_empty_object.bal):**
+```ballerina
+public type Vars record {|
+    json _dwOutput_?;
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Vars vars = {};
+|};
+
+public function sampleFlow(Context ctx) {
+    json _dwOutput_ = check _dwMethod(ctx);
+    ctx.vars._dwOutput_ = _dwOutput_;
+    ctx.payload = _dwOutput_;
+}
+
+public function _dwMethod(Context ctx) returns json|error => let json payload = check ctx.payload.cloneWithType() in {
+        "attributes": {},
+        "fallback": (check payload.details) ?: {}
+    };
+
+```
+
+## Escaped String Expression
+
+**DataWeave Script (transform_message_with_escaped_string.dwl):**
+```dataweave
+%dw 2.0
+output application/json
+---
+{
+  markup: "<a href=\"https://ballerina.io\">link</a>",
+  quoted: "she said \"hello\""
+}
+
+```
+
+**Ballerina Output (transform_message_with_escaped_string.bal):**
+```ballerina
+public type Vars record {|
+    json _dwOutput_?;
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Vars vars = {};
+|};
+
+public function _dwMethod(Context ctx) returns json => {
+    "markup": "<a href=\"https://ballerina.io\">link</a>",
+    "quoted": "she said \"hello\""
+};
+
+public function sampleFlow(Context ctx) {
+    json _dwOutput_ = _dwMethod(ctx);
+    ctx.vars._dwOutput_ = _dwOutput_;
+    ctx.payload = _dwOutput_;
+}
+
+```
+
+## Expression Only Script Expression
+
+**DataWeave Script (transform_message_with_expression_only_script.dwl):**
+```dataweave
+[payload.id, payload.name]
+
+```
+
+**Ballerina Output (transform_message_with_expression_only_script.bal):**
+```ballerina
+public type Vars record {|
+    any _dwOutput_?;
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Vars vars = {};
+|};
+
+public function sampleFlow(Context ctx) {
+    any _dwOutput_ = check _dwMethod(ctx);
+    ctx.vars._dwOutput_ = _dwOutput_;
+    ctx.payload = _dwOutput_;
+}
+
+public function _dwMethod(Context ctx) returns any|error => let json payload = check ctx.payload.cloneWithType() in [check payload.id, check payload.name];
+
+```
+
 ## Filter Value Identifier Expression
 
 **DataWeave Script (transform_message_with_filter_value_identifier.dwl):**
@@ -252,6 +453,74 @@ public function sampleFlow(Context ctx) {
 public function _dwMethod(Context ctx) returns json {
     var _var_0 = [1, 2, 3, 4];
     return _var_0.filter(element => element > 2);
+}
+
+```
+
+## Infix Function Call Expression
+
+**DataWeave Script (transform_message_with_infix_function_call.dwl):**
+```dataweave
+%dw 2.0
+output application/json
+---
+{
+  result: payload customMerge "suffix"
+}
+
+```
+
+**Ballerina Output (transform_message_with_infix_function_call.bal):**
+```ballerina
+public type Vars record {|
+    json _dwOutput_?;
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Vars vars = {};
+|};
+
+public function sampleFlow(Context ctx) {
+    json _dwOutput_ = check _dwMethod(ctx);
+    ctx.vars._dwOutput_ = _dwOutput_;
+    ctx.payload = _dwOutput_;
+}
+
+public function _dwMethod(Context ctx) returns json|error => let json payload = check ctx.payload.cloneWithType() in {"result": customMerge(payload, "suffix")};
+
+```
+
+## Join By Expression
+
+**DataWeave Script (transform_message_with_join_by.dwl):**
+```dataweave
+%dw 2.0
+output application/json
+---
+{
+  ids: payload.ids joinBy ","
+}
+
+```
+
+**Ballerina Output (transform_message_with_join_by.bal):**
+```ballerina
+public type Vars record {|
+    json _dwOutput_?;
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Vars vars = {};
+|};
+
+public function _dwMethod(Context ctx) returns json|error => let json payload = check ctx.payload.cloneWithType(), string[] _var_0 = check (check payload.ids).cloneWithType() in {"ids": string:'join(",", ..._var_0)};
+
+public function sampleFlow(Context ctx) {
+    json _dwOutput_ = check _dwMethod(ctx);
+    ctx.vars._dwOutput_ = _dwOutput_;
+    ctx.payload = _dwOutput_;
 }
 
 ```
@@ -452,6 +721,133 @@ public function _dwMethod(Context ctx) returns json => let var indexMemberPairs 
 
 ```
 
+## Multiple Imports Expression
+
+**DataWeave Script (transform_message_with_multiple_imports.dwl):**
+```dataweave
+%dw 2.0
+output application/json
+import config, mapRecord from dw::common::utils
+---
+{ id: payload.id }
+
+```
+
+**Ballerina Output (transform_message_with_multiple_imports.bal):**
+```ballerina
+public type Vars record {|
+    json _dwOutput_?;
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Vars vars = {};
+|};
+
+public function sampleFlow(Context ctx) {
+    json _dwOutput_ = check _dwMethod(ctx);
+    ctx.vars._dwOutput_ = _dwOutput_;
+    ctx.payload = _dwOutput_;
+}
+
+public function _dwMethod(Context ctx) returns json|error {
+    //TODO: UNSUPPORTED DATAWEAVE EXPRESSION 'importconfig,mapRecordfromdw::common::utils' FOUND. MANUAL CONVERSION REQUIRED.
+    json payload = check ctx.payload.cloneWithType();
+    return {"id": check payload.id};
+}
+
+```
+
+## Not Operator Expression
+
+**DataWeave Script (transform_message_with_not_operator.dwl):**
+```dataweave
+%dw 2.0
+output application/json
+---
+{
+  missing: !(payload.name != null),
+  present: not (payload.name != null)
+}
+
+```
+
+**Ballerina Output (transform_message_with_not_operator.bal):**
+```ballerina
+public type Vars record {|
+    json _dwOutput_?;
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Vars vars = {};
+|};
+
+public function _dwMethod(Context ctx) returns json|error => let json payload = check ctx.payload.cloneWithType() in {
+        "missing": !(check payload.name != ()),
+        "present": !(check payload.name != ())
+    };
+
+public function sampleFlow(Context ctx) {
+    json _dwOutput_ = check _dwMethod(ctx);
+    ctx.vars._dwOutput_ = _dwOutput_;
+    ctx.payload = _dwOutput_;
+}
+
+```
+
+## Null And Qualified Import Expression
+
+**DataWeave Script (transform_message_with_null_and_qualified_import.dwl):**
+```dataweave
+%dw 2.0
+output application/json
+import buildIds from dw::common::utils
+
+var items = if (payload != null) [payload] else []
+---
+{
+  items: items,
+  empty: null
+}
+
+```
+
+**Ballerina Output (transform_message_with_null_and_qualified_import.bal):**
+```ballerina
+public type Vars record {|
+    json _dwOutput_?;
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Vars vars = {};
+|};
+
+public function sampleFlow(Context ctx) {
+    json _dwOutput_ = check _dwMethod(ctx);
+    ctx.vars._dwOutput_ = _dwOutput_;
+    ctx.payload = _dwOutput_;
+}
+
+public function _dwMethod(Context ctx) returns json|error {
+    //TODO: UNSUPPORTED DATAWEAVE EXPRESSION 'importbuildIdsfromdw::common::utils' FOUND. MANUAL CONVERSION REQUIRED.
+    json _var_0;
+    json payload = check ctx.payload.cloneWithType();
+    if payload != () {
+        _var_0 = [payload];
+    } else {
+        _var_0 = [];
+    }
+    var items = _var_0;
+    return {
+        "items": items,
+        "empty": ()
+    };
+}
+
+```
+
 ## Property Reading Expression
 
 **DataWeave Script (transform_message_with_property_reading.dwl):**
@@ -627,6 +1023,46 @@ public function sampleFlow(Context ctx) {
     ctx.vars._dwOutput_ = _dwOutput_;
     ctx.payload = _dwOutput_;
 }
+
+```
+
+## Subtraction Expression
+
+**DataWeave Script (transform_message_with_subtraction.dwl):**
+```dataweave
+%dw 2.0
+output application/json
+---
+{
+  remaining: 10 - 4,
+  negated: -3,
+  mixed: 10 - 4 + 2
+}
+
+```
+
+**Ballerina Output (transform_message_with_subtraction.bal):**
+```ballerina
+public type Vars record {|
+    json _dwOutput_?;
+|};
+
+public type Context record {|
+    anydata payload = ();
+    Vars vars = {};
+|};
+
+public function sampleFlow(Context ctx) {
+    json _dwOutput_ = _dwMethod(ctx);
+    ctx.vars._dwOutput_ = _dwOutput_;
+    ctx.payload = _dwOutput_;
+}
+
+public function _dwMethod(Context ctx) returns json => {
+    "remaining": 10 - 4,
+    "negated": -3,
+    "mixed": 10 - 4 + 2
+};
 
 ```
 

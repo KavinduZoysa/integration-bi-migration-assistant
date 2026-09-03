@@ -16,7 +16,7 @@ BOOLEAN: 'true' | 'false';
 // Keywords
 AND: 'and';
 OR: 'or';
-NOT: 'not';
+NOT: 'not' | '!';
 IF: 'if';
 ELSE: 'else';
 UNLESS: 'unless';
@@ -50,7 +50,8 @@ NOW: 'now';
 OPERATOR_EQUALITY: '==' | '!=' | '~=';
 OPERATOR_RELATIONAL:'>' | '<' | '>=' | '<=';
 OPERATOR_MULTIPLICATIVE: '*' | '/';
-OPERATOR_ADDITIVE: '+' | '>>' | '-' ;
+OPERATOR_ADDITIVE: '+' | '>>';
+MINUS: '-';
 OPERATOR_RANGE: '..';
 CONCAT: '++';
 
@@ -60,7 +61,8 @@ VALUE_IDENTIFIER: '$';
 URL: [a-zA-Z]+ '://' [a-zA-Z0-9./_-]+;
 MEDIA_TYPE: [a-z]+ '/' [a-z0-9.+-]+;
 NUMBER: [0-9]+('.'[0-9]+)?;
-STRING: '"' .*? '"' | '\'' .*? '\'';
+BLOCK_COMMENT: '/*' .*? '*/' -> skip;
+STRING: '"' ('\\' . | ~["\\])* '"' | '\'' ('\\' . | ~['\\])* '\'';
 DATE: '|' .*? '|';
 REGEX: '/' .*? '/';
 DOT: '.';
@@ -84,7 +86,10 @@ AT: '@';
 QUESTION: '?';
 
 // Parser rules
-script: header? SEPARATOR body? NEWLINE* EOF;
+script
+    : header (SEPARATOR body?)? NEWLINE* EOF
+    | SEPARATOR? body NEWLINE* EOF
+    ;
 
 header: (directive (NEWLINE | WS)*)+;
 
@@ -104,13 +109,15 @@ outputDirective: OUTPUT MEDIA_TYPE;
 
 inputDirective: INPUT IDENTIFIER MEDIA_TYPE;
 
-importDirective: IMPORT IDENTIFIER (FROM STRING)?;
+importDirective: IMPORT importSpec (COMMA importSpec)* (FROM (qualifiedIdentifier | STRING))?;
+
+importSpec: STAR | qualifiedIdentifier (AS IDENTIFIER)?;
 
 namespaceDirective: NAMESPACE IDENTIFIER URL;
 
 variableDeclaration: VAR IDENTIFIER ASSIGN expression;
 
-functionDeclaration: FUNCTION IDENTIFIER LPAREN functionParameters? RPAREN expression;
+functionDeclaration: FUNCTION IDENTIFIER LPAREN functionParameters? RPAREN (COLON typeExpression)? ASSIGN expression;
 
 typeDeclaration: TYPE IDENTIFIER ASSIGN typeExpression;
 
@@ -129,6 +136,7 @@ operationExpression
     | operationExpression GROUP_BY implicitLambdaExpression # groupByExpression
     | operationExpression REPLACE REGEX WITH expression     # replaceExpression
     | operationExpression CONCAT defaultExpression          # concatExpression
+    | operationExpression IDENTIFIER defaultExpression      # infixFunctionCall
     | defaultExpression                                     # operationExpressionWrapper
     ;
 
@@ -147,7 +155,9 @@ implicitLambdaExpression
 // Lambda functions
 inlineLambda: '(' functionParameters ')' ARROW expression;
 
-functionParameters: IDENTIFIER (COMMA IDENTIFIER)*;
+functionParameters: functionParameter (COMMA functionParameter)*;
+
+functionParameter: IDENTIFIER (COLON typeExpression)? (ASSIGN expression)?;
 
 
 // Level 8: Logical OR
@@ -173,8 +183,10 @@ relationalExpression
 
 // Level 4: Additive Operators (+, -, >>)
 additiveExpression
-    : multiplicativeExpression (OPERATOR_ADDITIVE multiplicativeExpression)*
+    : multiplicativeExpression (additiveOperator multiplicativeExpression)*
     ;
+
+additiveOperator: OPERATOR_ADDITIVE | MINUS;
 
 // Level 3: Multiplicative Operators (*, /)
 multiplicativeExpression
@@ -183,7 +195,8 @@ multiplicativeExpression
 
 // Level 2: Type Coercion (`as`)
 typeCoercionExpression
-    : unaryExpression (AS typeExpression formatOption?)?
+    : typeCoercionExpression AS typeExpression formatOption?
+    | unaryExpression
     ;
 
 // Formatting options within `{}`
@@ -200,13 +213,14 @@ unaryExpression
     | LOWER '(' expression ')'             # lowerExpressionWithParentheses
     | LOWER expression                     # lowerExpression
     | NOT expression                       # notExpression
-    | '-' expression                       # negativeExpression
+    | MINUS expression                     # negativeExpression
     | primaryExpression                    # primaryExpressionWrapper
     ;
 
 // **Primary Expressions (Highest Precedence)**
 primaryExpression
-    : IF LPAREN logicalOrExpression RPAREN logicalOrExpression (ELSE IF LPAREN logicalOrExpression RPAREN logicalOrExpression)* (ELSE logicalOrExpression)?    # ifElseCondition
+    : IF LPAREN expression RPAREN expression (ELSE IF LPAREN expression RPAREN expression)* (ELSE expression)?    # ifElseCondition
+    | doBlock                                                   # doBlockExpression
     | inlineLambda                                              # lambdaExpression
     | grouped                                                   # groupedExpression
     | literal                                                   # literalExpression
@@ -229,6 +243,9 @@ builtInFunction
 // Grouped expressions
 grouped: '(' expression ')';
 
+// Scoped expressions: do { <declarations> --- <expression> }
+doBlock: DO LCURLY header? SEPARATOR expression RCURLY;
+
 selectorExpression
     : DOT IDENTIFIER                         # singleValueSelector
     | DOT STRING                             # keySelector
@@ -245,7 +262,8 @@ literal
     | NUMBER
     | BOOLEAN
     | DATE
-    | REGEX;
+    | REGEX
+    | NULL;
 
 // Arrays
 array: LSQUARE (expression (COMMA expression)*)? RSQUARE;
@@ -254,12 +272,14 @@ array: LSQUARE (expression (COMMA expression)*)? RSQUARE;
 object
     : LCURLY objectField (COMMA? objectField)* RCURLY  # multiFieldObject
     | LCURLY objectField RCURLY                        # singleFieldObject
+    | LCURLY RCURLY                                    # emptyObject
     ;
 
 objectField
     : IDENTIFIER COLON expression              # unquotedKeyField
     | STRING COLON expression                  # quotedKeyField
     | '(' expression ')' COLON expression      # dynamicKeyField
+    | '(' objectField ')' IF expression        # conditionalField
     ;
 
 // Qualified identifiers for module references (e.g., Mule::p)
