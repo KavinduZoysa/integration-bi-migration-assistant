@@ -166,6 +166,11 @@ public class DWReader {
         context.clearScript();
     }
 
+    public static String processInlineDWScript(String script, Context ctx, List<Statement> statementList,
+                                              String varName, String namePrefix) throws DWCodeGenException {
+        return getFunctionStatement(script, null, new DWContext(ctx, statementList), ctx, varName, namePrefix);
+    }
+
     static String getFunctionStatement(String script, String resourcePath, DWContext context,
                                                Context ctx, String varName,
                                                String namePrefix) throws DWCodeGenException {

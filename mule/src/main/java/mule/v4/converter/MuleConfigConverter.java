@@ -335,6 +335,10 @@ public class MuleConfigConverter {
 
     private static WorkerStatementResult convertLogger(Context ctx, Logger lg) {
         String logFuncName = getBallerinaLogFunction(lg.level());
+        Optional<String> dwScript = extractDataWeaveScript(lg.message());
+        if (dwScript.isPresent()) {
+            return convertDataWeaveLogger(ctx, logFuncName, dwScript.get());
+        }
         List<Statement> stmts = new ArrayList<>();
         try {
             String stringLiteral = convertMuleExprToBalStringLiteral(ctx, lg.message());
@@ -342,6 +346,30 @@ public class MuleConfigConverter {
             stmts.add(stmt);
         } catch (ScriptConversionException e) {
             stmts.add(new Statement.Comment("TODO: failed to convert " + e.getMelExpression()));
+        }
+        return new WorkerStatementResult(stmts);
+    }
+
+    @NotNull
+    private static Optional<String> extractDataWeaveScript(String message) {
+        if (message == null || !message.startsWith("#[") || !message.endsWith("]")) {
+            return Optional.empty();
+        }
+        String script = message.substring(2, message.length() - 1).strip();
+        return script.startsWith(Constants.DW_SCRIPT_HEADER_PREFIX) ? Optional.of(script) : Optional.empty();
+    }
+
+    private static WorkerStatementResult convertDataWeaveLogger(Context ctx, String logFuncName, String dwScript) {
+        List<Statement> stmts = new ArrayList<>();
+        String varName = Constants.VAR_LOG_MESSAGE_TEMPLATE
+                .formatted(ctx.projectCtx.counters.logMessageVarCount++);
+        try {
+            stmts.add(new BallerinaStatement(
+                    DWReader.processInlineDWScript(dwScript, ctx, stmts, varName, "_dwMethod")));
+            stmts.add(stmtFrom("log:%s(%s.toJsonString());".formatted(logFuncName, varName)));
+        } catch (DWCodeGenException e) {
+            stmts.add(new Statement.Comment("TODO: failed to convert DataWeave script "
+                    + e.getScriptIdentifier()));
         }
         return new WorkerStatementResult(stmts);
     }
